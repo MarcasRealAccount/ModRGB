@@ -9,7 +9,7 @@ require("Premake/Libs/vma")
 require("Premake/Libs/vulkan")
 -- require("Premake/Libs/inipp")
 
-workspace("ProRGB")
+workspace("ModRGB")
 	common:setConfigsAndPlatforms()
 
 	common:addCoreDefines()
@@ -65,6 +65,28 @@ workspace("ProRGB")
 		location("ThirdParty/")
 
 	group("Libraries")
+	project("Common")
+	    location("Libraries/Common/")
+	    warnings("Extra")
+
+	    kind("StaticLib")
+	    common:outDirs(true)
+
+	    common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location/Source/PCH.h")
+
+        includedirs({
+            "%{prj.location}/Include/",
+            "%{prj.location}/Source/"
+        })
+
+        files({
+            "%{prj.location}/Include/**",
+            "%{prj.location}/Source/**"
+        })
+        removefiles({ "*.DS_Store" })
+
+        common:addActions()
+
 	project("Server")
 		location("Libraries/Server/")
 		warnings("Extra")
@@ -84,6 +106,9 @@ workspace("ProRGB")
 			"%{prj.location}/Source/**"
 		})
         removefiles({ "*.DS_Store" })
+
+        links({ "Common" })
+        sysincludedirs({ "Libraries/Common/" })
 
         common:addActions()
 
@@ -107,6 +132,9 @@ workspace("ProRGB")
         })
         removefiles({ "*.DS_Store" })
 
+        links({ "Common" })
+        sysincludedirs({ "Libraries/Common/" })
+
         common:addActions()
 
 	project("Controller")
@@ -128,6 +156,9 @@ workspace("ProRGB")
             "%{prj.location}/Source/**"
         })
         removefiles({ "*.DS_Store" })
+
+        links({ "Common" })
+        sysincludedirs({ "Libraries/Common/" })
 
         common:addActions()
 
