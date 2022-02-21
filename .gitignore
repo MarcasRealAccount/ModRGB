@@ -3,13 +3,9 @@
 
 # Visual Studio
 /.vs/
-Carbonite.sln
+*.sln
 *.vcxproj
 *.vcxproj.*
-/CarboniteBaseMod/bin/
-/CarboniteBaseMod/obj/
-/CarboniteModAPI/bin/
-/CarboniteModAPI/obj/
 
 # CLion
 /.idea/
@@ -29,12 +25,6 @@ Makefile
 
 # Macos
 *.DS_Store
-
-# C#
-Carbonite/Run/Base/Base.dll
-Carbonite/Run/Base/Base.pdb
-Carbonite/Run/Mods/*.dll
-Carbonite/Run/Mods/*.pdb
 
 # Premake
 premake5.exe
