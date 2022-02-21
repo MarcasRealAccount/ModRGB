@@ -1,2 +1,2 @@
-# ProRGB
+# ModRGB
 Modular lighting solution
