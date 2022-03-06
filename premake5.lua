@@ -1,13 +1,17 @@
 require("Premake/Common")
 
-require("Premake/Libs/glfw")
-require("Premake/Libs/glm")
-require("Premake/Libs/imgui")
-require("Premake/Libs/spdlog")
-require("Premake/Libs/stb")
-require("Premake/Libs/vma")
-require("Premake/Libs/vulkan")
--- require("Premake/Libs/inipp")
+require("Premake/Libs/Common")
+require("Premake/Libs/Server")
+require("Premake/Libs/Client")
+require("Premake/Libs/Controller")
+
+require("Premake/ThirdParty/glfw")
+require("Premake/ThirdParty/glm")
+require("Premake/ThirdParty/imgui")
+require("Premake/ThirdParty/spdlog")
+require("Premake/ThirdParty/stb")
+require("Premake/ThirdParty/vma")
+require("Premake/ThirdParty/vulkan")
 
 workspace("ModRGB")
 	common:setConfigsAndPlatforms()
@@ -68,98 +72,25 @@ workspace("ModRGB")
 	project("Common")
 	    location("Libraries/Common/")
 	    warnings("Extra")
-
-	    kind("StaticLib")
-	    common:outDirs(true)
-
-	    common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location/Source/PCH.h")
-
-        includedirs({
-            "%{prj.location}/Include/",
-            "%{prj.location}/Source/"
-        })
-
-        files({
-            "%{prj.location}/Include/**",
-            "%{prj.location}/Source/**"
-        })
-        removefiles({ "*.DS_Store" })
-
+		libs.Common:setup()
         common:addActions()
 
 	project("Server")
 		location("Libraries/Server/")
 		warnings("Extra")
-
-		kind("StaticLib")
-		common:outDirs(true)
-
-		common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location/Source/PCH.h")
-
-        includedirs({
-            "%{prj.location}/Include/",
-            "%{prj.location}/Source/"
-        })
-
-		files({
-			"%{prj.location}/Include/**",
-			"%{prj.location}/Source/**"
-		})
-        removefiles({ "*.DS_Store" })
-
-        links({ "Common" })
-        sysincludedirs({ "Libraries/Common/" })
-
+		libs.Server:setup()
         common:addActions()
 
 	project("Client")
 		location("Libraries/Client/")
 		warnings("Extra")
-
-		kind("StaticLib")
-		common:outDirs(true)
-
-		common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location/Source/PCH.h")
-
-		includedirs({
-			"%{prj.location}/Include/",
-			"%{prj.location}/Source/"
-		})
-
-        files({
-            "%{prj.location}/Include/**",
-            "%{prj.location}/Source/**"
-        })
-        removefiles({ "*.DS_Store" })
-
-        links({ "Common" })
-        sysincludedirs({ "Libraries/Common/" })
-
+		libs.Client:setup()
         common:addActions()
 
 	project("Controller")
 		location("Libraries/Controller/")
 		warnings("Extra")
-
-		kind("StaticLib")
-		common:outDirs(true)
-
-		common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location/Source/PCH.h")
-
-        includedirs({
-            "%{prj.location}/Include/",
-            "%{prj.location}/Source/"
-        })
-
-		files({
-            "%{prj.location}/Include/**",
-            "%{prj.location}/Source/**"
-        })
-        removefiles({ "*.DS_Store" })
-
-        links({ "Common" })
-        sysincludedirs({ "Libraries/Common/" })
-
+		libs.Controller:setup()
         common:addActions()
 
 	group("Apps")
@@ -178,9 +109,9 @@ workspace("ModRGB")
 
 		filter({})
 
-		common:addPCH("%{prj.location}/Source/PCH.cpp", "%{prj.location}/Source/PCH.h")
+		common:addPCH("%{prj.location}/Src/PCH.cpp", "%{prj.location}/Src/PCH.h")
 
-		includedirs({ "%{prj.location}/Source/" })
+		includedirs({ "%{prj.location}/Src/" })
 
 		if common.host == "windows" then
 			linkoptions({ "/IGNORE:4099" })
@@ -188,6 +119,7 @@ workspace("ModRGB")
 			linkoptions({ "-Wl,-rpath,'@executable_path'" })
 		end
 
+		libs.Controller:setupDep()
 		libs.glfw:setupDep()
 		libs.vma:setupDep()
 		libs.imgui:setupDep()
@@ -196,10 +128,26 @@ workspace("ModRGB")
 		libs.vulkan:setupDep(false)
 		libs.glm:setupDep()
 
-		links({ "Controller" })
-		sysincludedirs({ "%{wks.location}/Libraries/Controller/Include/" })
+		files({ "%{prj.location}/Src/**" })
+		removefiles({ "*.DS_Store" })
 
-		files({ "%{prj.location}/Source/**" })
+		common:addActions()
+
+	group("Tests")
+	project("Tests")
+		location("Tests/")
+		warnings("Extra")
+
+		common:outDirs()
+		common:debugDir()
+
+		kind("ConsoleApp")
+
+		libs.Server:setupDep()
+		libs.Client:setupDep()
+		libs.Controller:setupDep()
+
+		files({ "%{prj.location}/Src/**" })
 		removefiles({ "*.DS_Store" })
 
 		common:addActions()
