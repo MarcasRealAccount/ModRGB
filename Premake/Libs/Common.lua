@@ -27,6 +27,10 @@ function Common:setup()
 		"%{prj.location}/Src/**"
 	})
 	removefiles({ "*.DS_Store" })
+	
+	if common.target == "windows" then
+		links({ "Ws2_32" })
+	end
 end
 
 function Common:setupDep()
