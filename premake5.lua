@@ -1,9 +1,6 @@
 require("Premake/Common")
 
-require("Premake/Libs/Common")
-require("Premake/Libs/Server")
-require("Premake/Libs/Client")
-require("Premake/Libs/Controller")
+require("Premake/Libs/ModRGB")
 
 require("Premake/ThirdParty/glfw")
 require("Premake/ThirdParty/glm")
@@ -69,28 +66,10 @@ workspace("ModRGB")
 		location("ThirdParty/")
 
 	group("Libraries")
-	project("Common")
-	    location("Libraries/Common/")
+	project("ModRGB")
+	    location("Library")
 	    warnings("Extra")
-		libs.Common:setup()
-        common:addActions()
-
-	project("Server")
-		location("Libraries/Server/")
-		warnings("Extra")
-		libs.Server:setup()
-        common:addActions()
-
-	project("Client")
-		location("Libraries/Client/")
-		warnings("Extra")
-		libs.Client:setup()
-        common:addActions()
-
-	project("Controller")
-		location("Libraries/Controller/")
-		warnings("Extra")
-		libs.Controller:setup()
+		libs.ModRGB:setup()
         common:addActions()
 
 	group("Apps")
@@ -119,7 +98,7 @@ workspace("ModRGB")
 			linkoptions({ "-Wl,-rpath,'@executable_path'" })
 		end
 
-		libs.Controller:setupDep()
+		libs.ModRGB:setupDep()
 		libs.glfw:setupDep()
 		libs.vma:setupDep()
 		libs.imgui:setupDep()
@@ -143,9 +122,7 @@ workspace("ModRGB")
 
 		kind("ConsoleApp")
 
-		libs.Server:setupDep()
-		libs.Client:setupDep()
-		libs.Controller:setupDep()
+		libs.ModRGB:setupDep()
 
 		files({ "%{prj.location}/Src/**" })
 		removefiles({ "*.DS_Store" })

@@ -71,10 +71,10 @@ namespace ModRGB::Networking
 	}
 
 	IPv4Socket::IPv4Socket(ESocketType type)
-	    : m_Type(type), m_LocalAddress(0U), m_RemoteAddress(0U), m_LocalPort(0U), m_RemotePort(0U) {}
+	    : m_Type(type) {}
 
 	IPv4Socket::IPv4Socket(IPv4Socket&& move) noexcept
-	    : m_Type(move.m_Type), m_LocalAddress(move.m_LocalAddress), m_RemoteAddress(move.m_RemoteAddress), m_LocalPort(move.m_LocalPort), m_RemotePort(move.m_RemotePort), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Opened(move.m_Opened), m_Errored(move.m_Errored), m_Socket(move.m_Socket)
+	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Opened(move.m_Opened), m_Errored(move.m_Errored), m_Socket(move.m_Socket)
 	{
 		move.m_Socket = ~0ULL;
 		move.m_Opened = false;
@@ -86,13 +86,10 @@ namespace ModRGB::Networking
 			close();
 	}
 
-	void IPv4Socket::setLocalAddress(IPv4Address address, std::uint16_t port)
+	void IPv4Socket::setLocalEndpoint(IPv4Endpoint endpoint)
 	{
 		if (!m_Opened)
-		{
-			m_LocalAddress = address;
-			m_LocalPort    = port;
-		}
+			m_LocalEndpoint = endpoint;
 	}
 
 	void IPv4Socket::setWriteTimeout(std::uint32_t timeout)
@@ -207,7 +204,7 @@ namespace ModRGB::Networking
 		return offset;
 	}
 
-	std::size_t IPv4Socket::readFrom(void* buf, std::size_t len, IPv4Address& address, std::uint16_t& port)
+	std::size_t IPv4Socket::readFrom(void* buf, std::size_t len, IPv4Endpoint& endpoint)
 	{
 		if (!m_Opened)
 			return 0U;
@@ -262,10 +259,20 @@ namespace ModRGB::Networking
 		}
 #endif
 
-		address = addr.sin_addr.s_addr;
-		port    = ntohs(addr.sin_port);
+		endpoint.m_Address = addr.sin_addr.s_addr;
+		endpoint.m_Port    = ntohs(addr.sin_port);
 
 		return static_cast<std::size_t>(r);
+	}
+
+	std::size_t IPv4Socket::readFrom(void* buf, std::size_t len, IPv4Address& address, std::uint16_t& port)
+	{
+		IPv4Endpoint endpoint;
+
+		auto res = readFrom(buf, len, endpoint);
+		address  = endpoint.m_Address;
+		port     = endpoint.m_Port;
+		return res;
 	}
 
 	std::size_t IPv4Socket::write(const void* buf, std::size_t len)
@@ -335,16 +342,16 @@ namespace ModRGB::Networking
 		return offset;
 	}
 
-	std::size_t IPv4Socket::writeTo(const void* buf, std::size_t len, IPv4Address address, std::uint16_t port)
+	std::size_t IPv4Socket::writeTo(const void* buf, std::size_t len, IPv4Endpoint endpoint)
 	{
 		if (!m_Opened)
 			return 0U;
 
 		sockaddr_in addr {
 			.sin_family = AF_INET,
-			.sin_port   = htons(port)
+			.sin_port   = htons(endpoint.m_Port)
 		};
-		addr.sin_addr.s_addr = address.m_Num;
+		addr.sin_addr.s_addr = endpoint.m_Address.m_Num;
 
 		const char* data = reinterpret_cast<const char*>(buf);
 
@@ -427,9 +434,9 @@ namespace ModRGB::Networking
 
 		sockaddr_in sa {
 			.sin_family = AF_INET,
-			.sin_port   = htons(m_LocalPort)
+			.sin_port   = htons(m_LocalEndpoint.m_Port)
 		};
-		sa.sin_addr.s_addr = m_LocalAddress.m_Num;
+		sa.sin_addr.s_addr = m_LocalEndpoint.m_Address.m_Num;
 
 		if (::bind(static_cast<SOCKET>(m_Socket), reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) < 0)
 		{
@@ -454,9 +461,9 @@ namespace ModRGB::Networking
 		sockaddr_in sa {
 			.sin_len = sizeof(sa),
 			.sin_family = AF_INET,
-			.sin_port = htons(m_LocalPort)
+			.sin_port = htons(m_LocalEndpoint.m_Port)
 		};
-		sa.sin_addr.s_addr = m_LocalAddress.m_Num;
+		sa.sin_addr.s_addr = m_LocalEndpoint.m_Address.m_Num;
 
 		if (::bind(static_cast<int>(m_Socket), reinterpret_cast<sockaddr*>(&sa), sizeof(sa)) < 0)
 		{
@@ -484,9 +491,8 @@ namespace ModRGB::Networking
 		if (::close(static_cast<int>(m_Socket)) < 0)
 			ReportError(errno);
 #endif
-		m_RemoteAddress = { 0U };
-		m_RemotePort    = 0U;
-		m_Opened        = false;
+		m_RemoteEndpoint = {};
+		m_Opened         = false;
 	}
 
 	void IPv4Socket::closeW()
@@ -528,7 +534,7 @@ namespace ModRGB::Networking
 		return connect({ 0U }, port);
 	}
 
-	bool IPv4Socket::connect(IPv4Address address, std::uint16_t port)
+	bool IPv4Socket::connect(IPv4Endpoint endpoint)
 	{
 		if (m_Opened)
 			return false;
@@ -547,9 +553,9 @@ namespace ModRGB::Networking
 
 		sockaddr_in addr = {
 			.sin_family = AF_INET,
-			.sin_port   = htons(port)
+			.sin_port   = htons(endpoint.m_Port)
 		};
-		addr.sin_addr.s_addr = address.m_Num;
+		addr.sin_addr.s_addr = endpoint.m_Address.m_Num;
 		int addrlen          = static_cast<int>(sizeof(addr));
 
 		if (::connect(static_cast<SOCKET>(m_Socket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
@@ -558,8 +564,7 @@ namespace ModRGB::Networking
 			close();
 			return false;
 		}
-		m_RemoteAddress = address;
-		m_RemotePort    = port;
+		m_RemoteEndpoint = endpoint;
 
 		if (::setsockopt(static_cast<SOCKET>(m_Socket), SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<char*>(&m_WriteTimeout), sizeof(m_WriteTimeout)) < 0)
 			ReportError(WSAGetLastError());
@@ -572,8 +577,8 @@ namespace ModRGB::Networking
 		}
 		else
 		{
-			m_LocalAddress = addr.sin_addr.s_addr;
-			m_LocalPort    = ntohs(addr.sin_port);
+			m_LocalEndpoint.m_Address = addr.sin_addr.s_addr;
+			m_LocalEndpoint.m_Port    = ntohs(addr.sin_port);
 		}
 		return true;
 #else
@@ -588,9 +593,9 @@ namespace ModRGB::Networking
 		sockaddr_in addr = {
 			.sin_len = sizeof(addr),
 			.sin_family = AF_INET,
-			.sin_port = htons(port)
+			.sin_port = htons(endpoint.m_Port)
 		};
-		addr.sin_addr.s_addr = address.m_Num;
+		addr.sin_addr.s_addr = endpoint.m_Address.m_Num;
 		socklen_t addrlen = static_cast<socklen_t>(sizeof(addr));
 
 		if (::connect(static_cast<int>(m_Socket), reinterpret_cast<sockaddr*>(&addr), sizeof(addr)) < 0)
@@ -599,8 +604,7 @@ namespace ModRGB::Networking
 			close();
 			return false;
 		}
-		m_RemoteAddress = address;
-		m_RemotePort = port;
+		m_RemoteEndpoint = endpoint;
 
 		if (::setsockopt(static_cast<int>(m_Socket), SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
 			ReportError(errno);
@@ -613,8 +617,8 @@ namespace ModRGB::Networking
 		}
 		else
 		{
-			m_LocalAddress = addr.sin_addr.s_addr;
-			m_LocalPort = ntohs(addr.sin_port);
+			m_LocalEndpoint.m_Address = addr.sin_addr.s_addr;
+			m_LocalEndpoint.m_Port = ntohs(addr.sin_port);
 		}
 		return true;
 #endif
@@ -680,8 +684,8 @@ namespace ModRGB::Networking
 		if (::setsockopt(static_cast<int>(socket.m_Socket), SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
 			ReportError(errno);
 #endif
-		socket.m_RemoteAddress = addr.sin_addr.s_addr;
-		socket.m_RemotePort    = ntohs(addr.sin_port);
+		socket.m_RemoteEndpoint.m_Address = addr.sin_addr.s_addr;
+		socket.m_RemoteEndpoint.m_Port    = ntohs(addr.sin_port);
 
 #if BUILD_IS_SYSTEM_WINDOWS
 		if (::getsockname(static_cast<SOCKET>(socket.m_Socket), reinterpret_cast<sockaddr*>(&addr), &addrlen) < 0)
@@ -690,8 +694,8 @@ namespace ModRGB::Networking
 		}
 		else
 		{
-			socket.m_LocalAddress = addr.sin_addr.s_addr;
-			socket.m_LocalPort    = ntohs(addr.sin_port);
+			socket.m_LocalEndpoint.m_Address = addr.sin_addr.s_addr;
+			socket.m_LocalEndpoint.m_Port    = ntohs(addr.sin_port);
 		}
 #else
 		if (::getsockname(static_cast<int>(socket.m_Socket), reinterpret_cast<sockaddr*>(&addr), &addrlen) < 0)
@@ -700,8 +704,8 @@ namespace ModRGB::Networking
 		}
 		else
 		{
-			socket.m_LocalAddress = addr.sin_addr.s_addr;
-			socket.m_LocalPort = ntohs(addr.sin_port);
+			socket.m_LocalEndpoint.m_Address = addr.sin_addr.s_addr;
+			socket.m_LocalEndpoint.m_Port = ntohs(addr.sin_port);
 		}
 #endif
 

@@ -1,14 +1,14 @@
 if not libs then libs = {} end
-if not libs.Common then
-	libs.Common = {
+if not libs.ModRGB then
+	libs.ModRGB = {
 		name     = "",
 		location = ""
 	}
 end
 
-local Common = libs.Common
+local ModRGB = libs.ModRGB
 
-function Common:setup()
+function ModRGB:setup()
 	self.name     = common:projectName()
 	self.location = common:projectLocation()
 
@@ -33,7 +33,7 @@ function Common:setup()
 	end
 end
 
-function Common:setupDep()
+function ModRGB:setupDep()
 	links({ self.name })
 	sysincludedirs({ self.location .. "/Inc/" })
 end

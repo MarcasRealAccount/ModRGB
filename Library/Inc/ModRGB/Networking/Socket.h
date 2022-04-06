@@ -20,6 +20,7 @@ namespace ModRGB::Networking
 	struct IPv4Address
 	{
 	public:
+		IPv4Address() : m_Num(0U) {}
 		IPv4Address(std::uint32_t address) : m_Num(address) {}
 		IPv4Address(std::uint8_t b0, std::uint8_t b1, std::uint8_t b2, std::uint8_t b3) : m_Bytes { b0, b1, b2, b3 } {}
 
@@ -28,6 +29,13 @@ namespace ModRGB::Networking
 			std::uint32_t m_Num;
 			std::uint8_t  m_Bytes[4];
 		};
+	};
+
+	struct IPv4Endpoint
+	{
+	public:
+		IPv4Address   m_Address;
+		std::uint16_t m_Port = 0U;
 	};
 
 	struct IPv4Socket
@@ -39,11 +47,10 @@ namespace ModRGB::Networking
 
 		auto getType() const { return m_Type; }
 
-		void setLocalAddress(IPv4Address address, std::uint16_t port);
-		auto getLocalAddress() const { return m_LocalAddress; }
-		auto getLocalPort() const { return m_LocalPort; }
-		auto getRemoteAddress() const { return m_RemoteAddress; }
-		auto getRemotePort() const { return m_RemotePort; }
+		void setLocalEndpoint(IPv4Endpoint endpoint);
+		void setLocalEndpoint(IPv4Address address, std::uint16_t port) { setLocalEndpoint({ address, port }); }
+		auto getLocalEndpoint() const { return m_LocalEndpoint; }
+		auto getRemoteEndpoint() const { return m_RemoteEndpoint; }
 
 		void setWriteTimeout(std::uint32_t timeout);
 		void setReadTimeout(std::uint32_t timeout);
@@ -51,9 +58,11 @@ namespace ModRGB::Networking
 		auto getReadTimeout() const { return m_ReadTimeout; }
 
 		std::size_t read(void* buf, std::size_t len);
+		std::size_t readFrom(void* buf, std::size_t len, IPv4Endpoint& endpoint);
 		std::size_t readFrom(void* buf, std::size_t len, IPv4Address& address, std::uint16_t& port);
 		std::size_t write(const void* buf, std::size_t len);
-		std::size_t writeTo(const void* buf, std::size_t len, IPv4Address address, std::uint16_t port);
+		std::size_t writeTo(void* buf, std::size_t len, IPv4Endpoint endpoint);
+		std::size_t writeTo(void* buf, std::size_t len, IPv4Address address, std::uint16_t port) { return writeTo(buf, len, { address, port }); }
 
 		void open();
 		void close();
@@ -63,7 +72,8 @@ namespace ModRGB::Networking
 		void closeRW();
 
 		bool connectResolve(std::string_view host, std::uint16_t port);
-		bool connect(IPv4Address address, std::uint16_t port);
+		bool connect(IPv4Endpoint endpoint);
+		bool connect(IPv4Address address, std::uint16_t port) { return connect({ address, port }); }
 
 		bool       listen(std::uint32_t backlog);
 		IPv4Socket accept();
@@ -72,11 +82,9 @@ namespace ModRGB::Networking
 		auto errored() const { return m_Errored; }
 
 	private:
-		ESocketType   m_Type;
-		IPv4Address   m_LocalAddress;
-		IPv4Address   m_RemoteAddress;
-		std::uint16_t m_LocalPort;
-		std::uint16_t m_RemotePort;
+		ESocketType  m_Type;
+		IPv4Endpoint m_LocalEndpoint;
+		IPv4Endpoint m_RemoteEndpoint;
 
 		std::uint32_t m_WriteTimeout = 2000;
 		std::uint32_t m_ReadTimeout  = 2000;
