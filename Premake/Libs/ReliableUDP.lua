@@ -1,16 +1,14 @@
 if not libs then libs = {} end
-if not libs.ModRGB then
-	libs.ModRGB = {
+if not libs.ReliableUDP then
+	libs.ReliableUDP = {
 		name     = "",
 		location = ""
 	}
 end
 
-require("ReliableUDP")
+local ReliableUDP = libs.ReliableUDP
 
-local ModRGB = libs.ModRGB
-
-function ModRGB:setup()
+function ReliableUDP:setup()
 	self.name     = common:projectName()
 	self.location = common:projectLocation()
 
@@ -30,12 +28,12 @@ function ModRGB:setup()
 	})
 	removefiles({ "*.DS_Store" })
 	
-	libs.ReliableUDP:setupDep()
+	if common.target == "windows" then
+		links({ "Ws2_32" })
+	end
 end
 
-function ModRGB:setupDep()
+function ReliableUDP:setupDep()
 	links({ self.name })
 	sysincludedirs({ self.location .. "/Inc/" })
-
-	libs.ReliableUDP:setupDep()
 end
