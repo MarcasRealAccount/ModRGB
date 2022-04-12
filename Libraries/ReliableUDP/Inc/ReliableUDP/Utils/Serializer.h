@@ -114,19 +114,19 @@ namespace ReliableUDP::Utils
 	};
 
 	template <class T>
-	constexpr bool Serialize(Buffer buffer, const T& value)
+	constexpr bool Serialize(Buffer buffer, const T& value) noexcept
 	{
 		return Serializer<T> {}.serialize(buffer, value);
 	}
 
 	template <class T>
-	constexpr bool Deserialize(Buffer buffer, T& value)
+	constexpr bool Deserialize(Buffer buffer, T& value) noexcept
 	{
 		return Serializer<T> {}.deserialize(buffer, value);
 	}
 
 	template <class T>
-	constexpr std::size_t Size(const T& value)
+	constexpr std::size_t Size(const T& value) noexcept
 	{
 		return Serializer<T> {}.size(value);
 	}
@@ -147,19 +147,19 @@ namespace ReliableUDP::Utils
 
 	public:
 		template <template <class...> class BT, class... Ts>
-		constexpr bool serializeBases(Buffer& buffer, const T& value, BT<Ts...>)
+		constexpr bool serializeBases(Buffer& buffer, const T& value, BT<Ts...>) noexcept
 		{
 			return (Serializer<Ts> {}.serialize(buffer, static_cast<const Ts&>(value)) && ...);
 		}
 
 		template <template <class...> class BT, class... Ts>
-		constexpr bool deserializeBases(Buffer& buffer, T& value, BT<Ts...>)
+		constexpr bool deserializeBases(Buffer& buffer, T& value, BT<Ts...>) noexcept
 		{
 			return (Serializer<Ts> {}.deserialize(buffer, static_cast<Ts&>(value)) && ...);
 		}
 
 		template <template <class...> class BT, class... Ts>
-		constexpr std::size_t size(const T& value, BT<Ts...>)
+		constexpr std::size_t size(const T& value, BT<Ts...>) noexcept
 		{
 			std::size_t size = 0;
 			(size += Serializer<Ts> {}.size(static_cast<const Ts&>(value)), ...);
@@ -167,26 +167,26 @@ namespace ReliableUDP::Utils
 		}
 
 		template <template <class...> class VT, class... Vs>
-		constexpr bool serializeVars(Buffer& buffer, const T& value, VT<Vs...>)
+		constexpr bool serializeVars(Buffer& buffer, const T& value, VT<Vs...>) noexcept
 		{
 			return (Vs::Serializer {}.serialize(buffer, value.*Vs::Ptr) && ...);
 		}
 
 		template <template <class...> class VT, class... Vs>
-		constexpr bool deserializeVars(Buffer& buffer, T& value, VT<Vs...>)
+		constexpr bool deserializeVars(Buffer& buffer, T& value, VT<Vs...>) noexcept
 		{
 			return (Vs::Serializer {}.deserialize(buffer, value.*Vs::Ptr) && ...);
 		}
 
 		template <template <class...> class VT, class... Vs>
-		constexpr std::size_t sizeVars(const T& value, VT<Vs...>)
+		constexpr std::size_t sizeVars(const T& value, VT<Vs...>) noexcept
 		{
 			std::size_t size = 0;
 			(size += Vs::Serializer {}.size(value.*Vs::Ptr), ...);
 			return size;
 		}
 
-		constexpr bool serialize(Buffer& buffer, const T& value)
+		constexpr bool serialize(Buffer& buffer, const T& value) noexcept
 		{
 			if constexpr (BaseTypes::Count > 0)
 				if (!serializeBases(buffer, value, BaseTypes {}))
@@ -197,7 +197,7 @@ namespace ReliableUDP::Utils
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, T& value)
+		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
 			if constexpr (BaseTypes::Count > 0)
 				if (!deserializeBases(buffer, value, BaseTypes {}))
@@ -208,7 +208,7 @@ namespace ReliableUDP::Utils
 			return true;
 		}
 
-		constexpr std::size_t size(const T& value)
+		constexpr std::size_t size(const T& value) noexcept
 		{
 			std::size_t size = 0;
 			if constexpr (BaseTypes::Count > 0)
@@ -223,19 +223,19 @@ namespace ReliableUDP::Utils
 	struct Serializer<T>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, T value)
+		constexpr bool serialize(Buffer& buffer, T value) noexcept
 		{
 			buffer.pushU8(static_cast<std::uint8_t>(value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, T& value)
+		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
 			value = static_cast<T>(buffer.popU8());
 			return true;
 		}
 
-		constexpr std::size_t size(T value)
+		constexpr std::size_t size(T value) noexcept
 		{
 			return 1U;
 		}
@@ -245,19 +245,19 @@ namespace ReliableUDP::Utils
 	struct Serializer<T>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, T value)
+		constexpr bool serialize(Buffer& buffer, T value) noexcept
 		{
 			buffer.pushU16(static_cast<std::uint16_t>(value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, T& value)
+		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
 			value = static_cast<T>(buffer.popU16());
 			return true;
 		}
 
-		constexpr std::size_t size(T value)
+		constexpr std::size_t size(T value) noexcept
 		{
 			return 2U;
 		}
@@ -267,19 +267,19 @@ namespace ReliableUDP::Utils
 	struct Serializer<T>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, T value)
+		constexpr bool serialize(Buffer& buffer, T value) noexcept
 		{
 			buffer.pushU32(static_cast<std::uint32_t>(value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, T& value)
+		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
 			value = static_cast<T>(buffer.popU32());
 			return true;
 		}
 
-		constexpr std::size_t size(T value)
+		constexpr std::size_t size(T value) noexcept
 		{
 			return 4U;
 		}
@@ -289,19 +289,19 @@ namespace ReliableUDP::Utils
 	struct Serializer<T>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, T value)
+		constexpr bool serialize(Buffer& buffer, T value) noexcept
 		{
 			buffer.pushU64(static_cast<std::uint64_t>(value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, T& value)
+		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
 			value = static_cast<T>(buffer.popU64());
 			return true;
 		}
 
-		constexpr std::size_t size(T value)
+		constexpr std::size_t size(T value) noexcept
 		{
 			return 8U;
 		}
@@ -311,21 +311,21 @@ namespace ReliableUDP::Utils
 	struct Serializer<std::basic_string<Value, Traits, Alloc>>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, const std::basic_string<Value, Traits, Alloc>& value)
+		constexpr bool serialize(Buffer& buffer, const std::basic_string<Value, Traits, Alloc>& value) noexcept
 		{
 			buffer.pushU64(value.size());
 			buffer.copy(value.data(), value.size() * sizeof(Value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, std::basic_string<Value, Traits, Alloc>& value)
+		constexpr bool deserialize(Buffer& buffer, std::basic_string<Value, Traits, Alloc>& value) noexcept
 		{
 			value.resize(buffer.popU64());
 			buffer.paste(value.data(), value.size() * sizeof(Value));
 			return true;
 		}
 
-		constexpr std::size_t size(const std::basic_string<Value, Traits, Alloc>& value)
+		constexpr std::size_t size(const std::basic_string<Value, Traits, Alloc>& value) noexcept
 		{
 			return 8 + value.size() * sizeof(Value);
 		}
@@ -335,7 +335,7 @@ namespace ReliableUDP::Utils
 	struct Serializer<std::vector<Value, Alloc>>
 	{
 	public:
-		constexpr bool serialize(Buffer& buffer, const std::vector<Value, Alloc>& values)
+		constexpr bool serialize(Buffer& buffer, const std::vector<Value, Alloc>& values) noexcept
 		{
 			buffer.pushU64(values.size());
 			for (auto& value : values)
@@ -343,7 +343,7 @@ namespace ReliableUDP::Utils
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, std::vector<Value, Alloc>& values)
+		constexpr bool deserialize(Buffer& buffer, std::vector<Value, Alloc>& values) noexcept
 		{
 			values.resize(buffer.popU64());
 			for (auto& value : values)
@@ -351,7 +351,7 @@ namespace ReliableUDP::Utils
 			return true;
 		}
 
-		constexpr std::size_t size(const std::vector<Value, Alloc>& values)
+		constexpr std::size_t size(const std::vector<Value, Alloc>& values) noexcept
 		{
 			std::size_t size = 8;
 			for (auto& value : values)
@@ -363,21 +363,21 @@ namespace ReliableUDP::Utils
 	template <Details::Integral Value, class Alloc>
 	struct Serializer<std::vector<Value, Alloc>>
 	{
-		constexpr bool serialize(Buffer& buffer, const std::vector<Value, Alloc>& value)
+		constexpr bool serialize(Buffer& buffer, const std::vector<Value, Alloc>& value) noexcept
 		{
 			buffer.pushU64(value.size());
 			buffer.copy(value.data(), value.size() * sizeof(Value));
 			return true;
 		}
 
-		constexpr bool deserialize(Buffer& buffer, std::vector<Value, Alloc>& value)
+		constexpr bool deserialize(Buffer& buffer, std::vector<Value, Alloc>& value) noexcept
 		{
 			value.resize(buffer.popU64());
 			buffer.paste(value.data(), value.size() * sizeof(Value));
 			return true;
 		}
 
-		constexpr std::size_t size(const std::vector<Value, Alloc>& value)
+		constexpr std::size_t size(const std::vector<Value, Alloc>& value) noexcept
 		{
 			return 8 + value.size() * sizeof(Value);
 		}
