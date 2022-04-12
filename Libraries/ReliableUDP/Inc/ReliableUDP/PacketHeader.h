@@ -7,8 +7,6 @@
 
 namespace ReliableUDP
 {
-	using PacketIDRNG = std::mt19937;
-
 	static constexpr std::uint32_t  s_MagicNumber { 0x72ADAD21 };
 	static constexpr Utils::Version s_Version { 1U, 0U, 0U };
 
@@ -34,11 +32,11 @@ namespace ReliableUDP
 	public:
 		using SerializerInfo = Utils::SerializerInfo<
 		    Utils::Bases<>,
-		    Utils::Variables<Utils::Variable<&Packet::m_MagicNumber>,
-		                     Utils::Variable<&Packet::m_Version>,
-		                     Utils::Variable<&Packet::m_ID>,
-		                     Utils::Variable<&Packet::m_Index>,
-		                     Utils::Variable<&Packet::m_Size>>,
+		    Utils::Variables<Utils::Variable<&PacketHeader::m_MagicNumber>,
+		                     Utils::Variable<&PacketHeader::m_Version>,
+		                     Utils::Variable<&PacketHeader::m_ID>,
+		                     Utils::Variable<&PacketHeader::m_Index>,
+		                     Utils::Variable<&PacketHeader::m_Size>>,
 		    true>;
 	};
 } // namespace ReliableUDP
