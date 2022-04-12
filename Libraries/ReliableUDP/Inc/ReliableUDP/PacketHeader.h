@@ -12,11 +12,11 @@ namespace ReliableUDP
 	static constexpr std::uint32_t  s_MagicNumber { 0x72ADAD21 };
 	static constexpr Utils::Version s_Version { 1U, 0U, 0U };
 
-	struct Packet
+	struct PacketHeader
 	{
 	public:
-		constexpr Packet() : m_MagicNumber(s_MagicNumber), m_Version(s_Version), m_ID(0U), m_Index(0U), m_Size(0U) {}
-		constexpr Packet(std::uint32_t id, std::uint32_t index, std::uint8_t rev, std::uint32_t size, bool ack = false) : m_MagicNumber(s_MagicNumber | ack << 31), m_ID(id), m_Index((index & 0xFFFFF) | rev << 20), m_Size(size) {}
+		constexpr PacketHeader() : m_MagicNumber(s_MagicNumber), m_Version(s_Version), m_ID(0U), m_Index(0U), m_Size(0U) {}
+		constexpr PacketHeader(std::uint32_t id, std::uint32_t index, std::uint8_t rev, std::uint32_t size, bool ack = false) : m_MagicNumber(s_MagicNumber | ack << 31), m_ID(id), m_Index((index & 0xFFFFF) | rev << 20), m_Size(size) {}
 
 		constexpr bool isValid() const { return (m_MagicNumber & 0x7FFFFFFF) == s_MagicNumber && m_Version.isCompatible(s_Version); }
 
