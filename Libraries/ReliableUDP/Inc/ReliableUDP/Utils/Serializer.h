@@ -69,13 +69,13 @@ namespace ReliableUDP::Utils
 		};
 
 		template <class T>
-		concept UInt8Serializable = sizeof(T) == 1 && std::is_convertible_v<T, std::uint8_t>&& std::is_convertible_v<std::uint8_t, T>;
+		concept UInt8Serializable = !std::is_pointer_v<T> && sizeof(T) == 1 && std::is_convertible_v<T, std::uint8_t> && std::is_convertible_v<std::uint8_t, T>;
 		template <class T>
-		concept UInt16Serializable = sizeof(T) == 2 && std::is_convertible_v<T, std::uint16_t>&& std::is_convertible_v<std::uint16_t, T>;
+		concept UInt16Serializable = !std::is_pointer_v<T> && sizeof(T) == 2 && std::is_convertible_v<T, std::uint16_t> && std::is_convertible_v<std::uint16_t, T>;
 		template <class T>
-		concept UInt32Serializable = sizeof(T) == 4 && std::is_convertible_v<T, std::uint32_t>&& std::is_convertible_v<std::uint32_t, T>;
+		concept UInt32Serializable = !std::is_pointer_v<T> && sizeof(T) == 4 && std::is_convertible_v<T, std::uint32_t> && std::is_convertible_v<std::uint32_t, T>;
 		template <class T>
-		concept UInt64Serializable = sizeof(T) == 8 && std::is_convertible_v<T, std::uint64_t>&& std::is_convertible_v<std::uint64_t, T>;
+		concept UInt64Serializable = !std::is_pointer_v<T> && sizeof(T) == 8 && std::is_convertible_v<T, std::uint64_t> && std::is_convertible_v<std::uint64_t, T>;
 
 		template <class T>
 		concept Integral = UInt8Serializable<T> || UInt16Serializable<T> || UInt32Serializable<T> || UInt64Serializable<T>;
@@ -105,12 +105,14 @@ namespace ReliableUDP::Utils
 	{
 	};
 
-	template <class Bases, class Vars>
+	template <class Bases, class Vars, bool DirectCopy>
 	struct SerializerInfo
 	{
 	public:
 		using BaseTypes = Bases;
 		using Variables = Vars;
+
+		static constexpr bool CanDirectCopy = DirectCopy;
 	};
 
 	template <class T>
@@ -188,34 +190,55 @@ namespace ReliableUDP::Utils
 
 		constexpr bool serialize(Buffer& buffer, const T& value) noexcept
 		{
-			if constexpr (BaseTypes::Count > 0)
-				if (!serializeBases(buffer, value, BaseTypes {}))
-					return false;
-			if constexpr (Vars::Count > 0)
-				if (!serializeVars(buffer, value, Vars {}))
-					return false;
+			if constexpr (SerializerInfo::CanDirectCopy)
+			{
+				buffer.copy(&value, sizeof(T));
+			}
+			else
+			{
+				if constexpr (BaseTypes::Count > 0)
+					if (!serializeBases(buffer, value, BaseTypes {}))
+						return false;
+				if constexpr (Vars::Count > 0)
+					if (!serializeVars(buffer, value, Vars {}))
+						return false;
+			}
 			return true;
 		}
 
 		constexpr bool deserialize(Buffer& buffer, T& value) noexcept
 		{
-			if constexpr (BaseTypes::Count > 0)
-				if (!deserializeBases(buffer, value, BaseTypes {}))
-					return false;
-			if constexpr (Vars::Count > 0)
-				if (!deserializeVars(buffer, value, Vars {}))
-					return false;
+			if constexpr (SerializerInfo::CanDirectCopy)
+			{
+				buffer.paste(&value, sizeof(T));
+			}
+			else
+			{
+				if constexpr (BaseTypes::Count > 0)
+					if (!deserializeBases(buffer, value, BaseTypes {}))
+						return false;
+				if constexpr (Vars::Count > 0)
+					if (!deserializeVars(buffer, value, Vars {}))
+						return false;
+			}
 			return true;
 		}
 
 		constexpr std::size_t size(const T& value) noexcept
 		{
-			std::size_t size = 0;
-			if constexpr (BaseTypes::Count > 0)
-				size += sizeBases(value, BaseTypes {});
-			if constexpr (Vars::Count > 0)
-				size += sizeVars(value, Vars {});
-			return size;
+			if constexpr (SerializerInfo::CanDirectCopy)
+			{
+				return sizeof(T);
+			}
+			else
+			{
+				std::size_t size = 0;
+				if constexpr (BaseTypes::Count > 0)
+					size += sizeBases(value, BaseTypes {});
+				if constexpr (Vars::Count > 0)
+					size += sizeVars(value, Vars {});
+				return size;
+			}
 		}
 	};
 

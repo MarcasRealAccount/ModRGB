@@ -24,7 +24,7 @@ namespace ReliableUDP::Utils
 				constexpr SubVersions(std::uint32_t major, std::uint32_t minor, std::uint32_t patch) : patch(patch), minor(minor), major(major) {}
 
 			public:
-				std::uint32_t patch : 14;
+				std::uint32_t patch : 12;
 				std::uint32_t minor : 10;
 				std::uint32_t major : 10;
 			} m_SubVersions;
