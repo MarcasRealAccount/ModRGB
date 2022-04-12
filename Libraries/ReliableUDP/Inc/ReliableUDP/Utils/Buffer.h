@@ -9,20 +9,51 @@ namespace ReliableUDP::Utils
 	struct Buffer
 	{
 	public:
-		constexpr Buffer(std::uint8_t* data, std::size_t size) noexcept : m_Data(data), m_Size(size), m_Offset(0U) {}
+		using FlushCallback = bool (*)(Buffer* buffer);
+
+	public:
+		constexpr Buffer(std::uint8_t* data, std::size_t size) noexcept : m_Data(data), m_Size(size), m_Offset(0U), m_FlushCallback(nullptr), m_UserData(nullptr) {}
+		constexpr Buffer(std::uint8_t* data, std::size_t size, FlushCallback flushCallback, void* userData) noexcept : m_Data(data), m_Size(size), m_Offset(0U), m_FlushCallback(flushCallback), m_UserData(userData) {}
 
 		constexpr void flip() noexcept { m_Offset = 0U; }
+		constexpr bool flush() noexcept
+		{
+			if (m_FlushCallback)
+			{
+				if (!m_FlushCallback(this))
+					return false;
+			}
+			else
+			{
+				return false;
+			}
+			m_Offset = 0U;
+			return true;
+		}
 
 		constexpr void copy(const void* from, std::size_t count) noexcept
 		{
-			if (m_Offset == m_Size)
+			std::size_t remaining = m_Size - m_Offset;
+			if (!remaining)
 				return;
 
-			count = std::min(m_Size - m_Offset, count);
-			if (count > 0)
+			if (remaining > count)
 			{
 				std::memcpy(m_Data + m_Offset, from, count);
 				m_Offset += count;
+				return;
+			}
+
+			while (count > 0)
+			{
+				std::size_t copyCount = std::min(remaining, count);
+				std::memcpy(m_Data + m_Offset, from, copyCount);
+				m_Offset += copyCount;
+				count -= copyCount;
+				remaining = m_Size - m_Offset;
+				if (!remaining)
+					if (!flush())
+						break;
 			}
 		}
 		constexpr void pushU8(std::uint8_t value) noexcept
@@ -32,6 +63,8 @@ namespace ReliableUDP::Utils
 
 			m_Data[m_Offset] = value;
 			++m_Offset;
+			if (m_Offset == m_Size)
+				flush();
 		}
 		constexpr void pushU16(std::uint16_t value) noexcept
 		{
@@ -43,11 +76,13 @@ namespace ReliableUDP::Utils
 			{
 				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = value;
 				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 			}
 			else
 			{
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
-				++m_Offset;
+				pushU8(static_cast<std::uint8_t>((value >> 8) & 0xFF));
+				pushU8(static_cast<std::uint8_t>(value & 0xFF));
 			}
 		}
 		constexpr void pushU32(std::uint32_t value) noexcept
@@ -60,23 +95,13 @@ namespace ReliableUDP::Utils
 			{
 				*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset) = value;
 				m_Offset += 4;
-			}
-			else if (remaining > 2)
-			{
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 16) & 0xFFFF);
-				m_Offset += 2;
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
-				++m_Offset;
-			}
-			else if (remaining > 1)
-			{
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 16) & 0xFFFF);
-				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 			}
 			else
 			{
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
-				++m_Offset;
+				pushU16(static_cast<std::uint16_t>((value >> 16) & 0xFFFF));
+				pushU16(static_cast<std::uint16_t>(value & 0xFFFF));
 			}
 		}
 		constexpr void pushU64(std::uint64_t value) noexcept
@@ -89,51 +114,13 @@ namespace ReliableUDP::Utils
 			{
 				*reinterpret_cast<std::uint64_t*>(m_Data + m_Offset) = value;
 				m_Offset += 8;
-			}
-			else if (remaining > 6)
-			{
-				*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset) = static_cast<std::uint32_t>((value >> 32) & 0xFFFFFFFF);
-				m_Offset += 4;
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 16) & 0xFFFF);
-				m_Offset += 2;
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 8) & 0xFF);
-				++m_Offset;
-			}
-			else if (remaining > 5)
-			{
-				*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset) = static_cast<std::uint32_t>((value >> 32) & 0xFFFFFFFF);
-				m_Offset += 4;
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 16) & 0xFFFF);
-				m_Offset += 2;
-			}
-			else if (remaining > 4)
-			{
-				*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset) = static_cast<std::uint32_t>((value >> 32) & 0xFFFFFFFF);
-				m_Offset += 4;
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 24) & 0xFF);
-				++m_Offset;
-			}
-			else if (remaining > 3)
-			{
-				*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset) = static_cast<std::uint32_t>((value >> 32) & 0xFFFFFFFF);
-				m_Offset += 4;
-			}
-			else if (remaining > 2)
-			{
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 48) & 0xFFFF);
-				m_Offset += 2;
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 40) & 0xFF);
-				++m_Offset;
-			}
-			else if (remaining > 1)
-			{
-				*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset) = static_cast<std::uint16_t>((value >> 48) & 0xFFFF);
-				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 			}
 			else
 			{
-				m_Data[m_Offset] = static_cast<std::uint8_t>((value >> 56) & 0xFF);
-				++m_Offset;
+				pushU32(static_cast<std::uint16_t>((value >> 32) & 0xFFFFFFFF));
+				pushU32(static_cast<std::uint16_t>(value & 0xFFFFFFFF));
 			}
 		}
 		constexpr void pushI8(std::int8_t value) noexcept { pushU8(static_cast<std::uint8_t>(value)); }
@@ -145,14 +132,27 @@ namespace ReliableUDP::Utils
 
 		constexpr void paste(void* to, std::size_t count) noexcept
 		{
-			if (m_Offset == m_Size)
+			std::size_t remaining = m_Size - m_Offset;
+			if (!remaining)
 				return;
 
-			count = std::min(m_Size - m_Offset, count);
-			if (count > 0)
+			if (remaining > count)
 			{
 				std::memcpy(to, m_Data + m_Offset, count);
 				m_Offset += count;
+				return;
+			}
+
+			while (count > 0)
+			{
+				std::size_t copyCount = std::min(remaining, count);
+				std::memcpy(to, m_Data + m_Offset, copyCount);
+				m_Offset += copyCount;
+				count -= copyCount;
+				remaining = m_Size - m_Offset;
+				if (!remaining)
+					if (!flush())
+						break;
 			}
 		}
 		constexpr std::uint8_t popU8() noexcept
@@ -162,6 +162,8 @@ namespace ReliableUDP::Utils
 
 			std::uint8_t v = m_Data[m_Offset];
 			++m_Offset;
+			if (m_Offset == m_Size)
+				flush();
 			return v;
 		}
 		constexpr std::uint16_t popU16() noexcept
@@ -174,12 +176,14 @@ namespace ReliableUDP::Utils
 			{
 				std::uint16_t v = *reinterpret_cast<std::uint16_t*>(m_Data + m_Offset);
 				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 				return v;
 			}
 			else
 			{
-				std::uint16_t v = static_cast<std::uint16_t>(m_Data[m_Offset]) << 8;
-				++m_Offset;
+				std::uint16_t v = static_cast<std::uint16_t>(popU8()) << 8;
+				v |= static_cast<std::uint16_t>(popU8());
 				return v;
 			}
 		}
@@ -193,26 +197,14 @@ namespace ReliableUDP::Utils
 			{
 				std::uint32_t v = *reinterpret_cast<std::uint32_t*>(m_Data + m_Offset);
 				m_Offset += 4;
-				return v;
-			}
-			else if (remaining > 2)
-			{
-				std::uint32_t v = static_cast<std::uint32_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 16;
-				m_Offset += 2;
-				v |= static_cast<std::uint32_t>(m_Data[m_Offset]) << 8;
-				++m_Offset;
-				return v;
-			}
-			else if (remaining > 1)
-			{
-				std::uint32_t v = static_cast<std::uint32_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 16;
-				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 				return v;
 			}
 			else
 			{
-				std::uint32_t v = static_cast<std::uint32_t>(m_Data[m_Offset]) << 24;
-				++m_Offset;
+				std::uint32_t v = static_cast<std::uint16_t>(popU16()) << 16;
+				v |= static_cast<std::uint16_t>(popU16());
 				return v;
 			}
 		}
@@ -226,58 +218,14 @@ namespace ReliableUDP::Utils
 			{
 				std::uint64_t v = *reinterpret_cast<std::uint64_t*>(m_Data + m_Offset);
 				m_Offset += 8;
-				return v;
-			}
-			else if (remaining > 6)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset)) << 32;
-				m_Offset += 4;
-				v |= static_cast<std::uint64_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 16;
-				m_Offset += 2;
-				v |= static_cast<std::uint64_t>(m_Data[m_Offset]) << 8;
-				++m_Offset;
-				return v;
-			}
-			else if (remaining > 5)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset)) << 32;
-				m_Offset += 4;
-				v |= static_cast<std::uint64_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 16;
-				m_Offset += 2;
-				return v;
-			}
-			else if (remaining > 4)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset)) << 32;
-				m_Offset += 4;
-				v |= static_cast<std::uint64_t>(m_Data[m_Offset]) << 24;
-				++m_Offset;
-				return v;
-			}
-			else if (remaining > 3)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint32_t*>(m_Data + m_Offset)) << 32;
-				m_Offset += 4;
-				return v;
-			}
-			else if (remaining > 2)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 48;
-				m_Offset += 2;
-				v |= static_cast<std::uint64_t>(m_Data[m_Offset]) << 40;
-				++m_Offset;
-				return v;
-			}
-			else if (remaining > 1)
-			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint16_t*>(m_Data + m_Offset)) << 48;
-				m_Offset += 2;
+				if (m_Offset == m_Size)
+					flush();
 				return v;
 			}
 			else
 			{
-				std::uint64_t v = static_cast<std::uint64_t>(*reinterpret_cast<std::uint8_t*>(m_Data + m_Offset)) << 56;
-				++m_Offset;
+				std::uint64_t v = static_cast<std::uint64_t>(popU32()) << 32;
+				v |= static_cast<std::uint64_t>(popU32());
 				return v;
 			}
 		}
@@ -291,10 +239,15 @@ namespace ReliableUDP::Utils
 		constexpr auto data() const noexcept { return m_Data; }
 		constexpr auto size() const noexcept { return m_Size; }
 		constexpr auto offset() const noexcept { return m_Offset; }
+		constexpr auto getFlushCallback() const noexcept { return m_FlushCallback; }
+		constexpr auto getUserData() const noexcept { return m_UserData; }
 
 	public:
 		std::uint8_t* m_Data;
 		std::size_t   m_Size;
 		std::size_t   m_Offset;
+
+		FlushCallback m_FlushCallback;
+		void*         m_UserData;
 	};
 } // namespace ReliableUDP::Utils
