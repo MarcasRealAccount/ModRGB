@@ -26,7 +26,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 	    []([[maybe_unused]] Socket* sock, std::uint32_t errorCode)
 	    {
 		    std::cout << "Error " << errorCode << "\n";
-	    });
+	    },
+	    nullptr);
 
 	socket.setLocalEndpoint({ "localhost", "http", EAddressType::IPv4 });
 

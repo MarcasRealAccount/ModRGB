@@ -16,8 +16,8 @@ namespace ReliableUDP::Networking
 		using ErrorReportCallback = void (*)(Socket* socket, std::uint32_t errorCode);
 
 	public:
-		Socket() : m_Type(ESocketType::TCP) {}
-		Socket(ESocketType type) : m_Type(type) {}
+		Socket() : m_Type(ESocketType::TCP), m_WriteTimeout(2000), m_ReadTimeout(2000), m_Socket(~0ULL), m_ErrorCallback(nullptr), m_UserData(nullptr) {}
+		Socket(ESocketType type) : m_Type(type), m_WriteTimeout(2000), m_ReadTimeout(2000), m_Socket(~0ULL), m_ErrorCallback(nullptr), m_UserData(nullptr) {}
 		Socket(Socket&& move) noexcept;
 		~Socket();
 
@@ -42,7 +42,7 @@ namespace ReliableUDP::Networking
 		void setLocalEndpoint(Endpoint endpoint);
 		void setWriteTimeout(std::uint32_t timeout);
 		void setReadTimeout(std::uint32_t timeout);
-		void setErrorCallback(ErrorReportCallback callback);
+		void setErrorCallback(ErrorReportCallback callback, void* userData);
 
 		auto getType() const { return m_Type; }
 		auto getLocalEndpoint() const { return m_LocalEndpoint; }
@@ -52,6 +52,7 @@ namespace ReliableUDP::Networking
 		auto getSocket() const { return m_Socket; }
 		bool isOpen() const { return m_Socket != ~0ULL; }
 		auto getErrorCallback() const { return m_ErrorCallback; }
+		auto getUserData() const { return m_UserData; }
 
 	private:
 		void reportError(std::uint32_t errorCode);
@@ -61,11 +62,12 @@ namespace ReliableUDP::Networking
 		Endpoint    m_LocalEndpoint;
 		Endpoint    m_RemoteEndpoint;
 
-		std::uint32_t m_WriteTimeout = 2000;
-		std::uint32_t m_ReadTimeout  = 2000;
+		std::uint32_t m_WriteTimeout;
+		std::uint32_t m_ReadTimeout;
 
-		std::uintptr_t m_Socket = ~0ULL;
+		std::uintptr_t m_Socket;
 
 		ErrorReportCallback m_ErrorCallback;
+		void*               m_UserData;
 	};
 } // namespace ReliableUDP::Networking

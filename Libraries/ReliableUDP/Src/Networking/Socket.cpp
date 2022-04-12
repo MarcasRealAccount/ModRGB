@@ -272,7 +272,7 @@ namespace ReliableUDP::Networking
 	}
 
 	Socket::Socket(Socket&& move) noexcept
-	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Socket(move.m_Socket), m_ErrorCallback(nullptr)
+	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Socket(move.m_Socket), m_ErrorCallback(move.m_ErrorCallback), m_UserData(move.m_UserData)
 	{
 		move.m_Socket = ~0ULL;
 	}
@@ -629,9 +629,10 @@ namespace ReliableUDP::Networking
 		}
 	}
 
-	void Socket::setErrorCallback(ErrorReportCallback callback)
+	void Socket::setErrorCallback(ErrorReportCallback callback, void* userData)
 	{
 		m_ErrorCallback = callback;
+		m_UserData      = userData;
 	}
 
 	void Socket::reportError(std::uint32_t errorCode)
