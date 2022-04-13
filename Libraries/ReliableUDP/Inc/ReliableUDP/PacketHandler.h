@@ -52,8 +52,8 @@ namespace ReliableUDP
 		using HandleCallback = void (*)(PacketHeader* packet, std::uint32_t size);
 
 	public:
-		// ESP32 example: 45056, 45056, 64, 64
-		PacketHandler(std::uint32_t readBufferSize, std::uint32_t writeBufferSize, std::uint32_t maxReadPackets, std::uint32_t maxWritePackets, HandleCallback handleCallback, void* userData);
+		// ESP32 example: 45056, 45056, 64, 64, 8
+		PacketHandler(std::uint32_t readBufferSize, std::uint32_t writeBufferSize, std::uint32_t maxReadPackets, std::uint32_t maxWritePackets, std::uint32_t sendCount, HandleCallback handleCallback, void* userData);
 		~PacketHandler();
 
 		void updatePackets();
@@ -77,8 +77,8 @@ namespace ReliableUDP
 		void rejectPacket(Networking::Endpoint endpoint, std::uint16_t id, std::uint16_t rev);
 		void sendMaxSizePacket(Networking::Endpoint endpoint, std::uint16_t id);
 
-		bool hasHandledSection(std::uint16_t id, std::uint16_t index, std::uint16_t rev);
-		bool receivedSection(std::uint16_t id, std::uint16_t index, std::uint16_t rev);
+		bool hasHandledSection(std::uint16_t id, std::uint32_t index, std::uint16_t rev);
+		bool receivedSection(std::uint16_t id, std::uint32_t index, std::uint16_t rev);
 		bool readPacketDone(std::uint16_t id);
 
 		std::uint16_t newPacketID();
@@ -116,11 +116,22 @@ namespace ReliableUDP
 		std::uint32_t    m_MaxWritePackets;
 		ReadPacketInfo*  m_ReadPacketInfos;
 		WritePacketInfo* m_WritePacketInfos;
+		std::uint32_t    m_SendPacket { 0U };
+		std::uint32_t    m_SendIndex { 0U };
+		std::uint32_t    m_ToSend;
+		std::uint32_t    m_SendCount;
 
 		Utils::RotatingArray<std::uint16_t, 16U> m_UsedPacketIDs;
 		Utils::RotatingArray<std::uint16_t, 16U> m_HandledPacketIDs;
 
 		HandleCallback m_HandleCallback;
 		void*          m_UserData;
+
+		Clock::time_point m_LastSendout;
+		float             m_ReadTimeout { 2.0f };
+		float             m_WriteTimeout { 2.0f };
+		float             m_SendoutTimer { 0.1f };
 	};
+
+	static constexpr auto S = sizeof(PacketHandler) + (45056 + 4096) + (45056 + 4096) + (64 * sizeof(ReadPacketInfo)) + (64 * sizeof(WritePacketInfo));
 } // namespace ReliableUDP
