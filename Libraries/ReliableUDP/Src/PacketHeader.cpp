@@ -2,8 +2,13 @@
 
 namespace ReliableUDP
 {
-	EPacketHeaderType GetPacketHeaderType(std::uint32_t magicNumber)
+	bool IsMagicNumberValid(std::uint16_t magicNumber)
 	{
-		return static_cast<EPacketHeaderType>((magicNumber >> 30) & 0b11);
+		return (magicNumber & 0x3FFF) == s_MagicNumber;
+	}
+
+	EPacketHeaderType GetPacketHeaderType(std::uint16_t magicNumber)
+	{
+		return static_cast<EPacketHeaderType>((magicNumber >> 14) & 0b11);
 	}
 } // namespace ReliableUDP

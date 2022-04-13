@@ -7,12 +7,12 @@
 
 namespace ReliableUDP::Utils
 {
-	template <class T, std::size_t N>
+	template <class T, std::uint32_t N>
 	struct RotatingArray
 	{
 	public:
 		using value_type             = T;
-		using size_type              = std::size_t;
+		using size_type              = std::uint32_t;
 		using difference_type        = std::ptrdiff_t;
 		using reference              = value_type&;
 		using const_reference        = const value_type&;
@@ -129,6 +129,6 @@ namespace ReliableUDP::Utils
 		T m_Elements[N];
 
 	private:
-		std::size_t m_Index = 0;
+		size_type m_Index = 0;
 	};
 } // namespace ReliableUDP::Utils
