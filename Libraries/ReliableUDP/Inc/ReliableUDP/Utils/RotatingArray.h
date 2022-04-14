@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <stdexcept>
 #include <type_traits>
 
 namespace ReliableUDP::Utils

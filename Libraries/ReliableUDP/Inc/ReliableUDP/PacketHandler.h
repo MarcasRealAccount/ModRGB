@@ -49,7 +49,7 @@ namespace ReliableUDP
 	struct PacketHandler
 	{
 	public:
-		using HandleCallback = void (*)(PacketHeader* packet, std::uint32_t size);
+		using HandleCallback = void (*)(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size);
 
 	public:
 		// ESP32 example: 45056, 45056, 64, 64, 8
@@ -132,6 +132,4 @@ namespace ReliableUDP
 		float             m_WriteTimeout { 2.0f };
 		float             m_SendoutTimer { 0.1f };
 	};
-
-	static constexpr auto S = sizeof(PacketHandler) + (45056 + 4096) + (45056 + 4096) + (64 * sizeof(ReadPacketInfo)) + (64 * sizeof(WritePacketInfo));
 } // namespace ReliableUDP

@@ -121,7 +121,7 @@ namespace ReliableUDP
 					{
 						std::uint32_t packetSize { 0U };
 						std::uint8_t* ptr { getReadPacket(header->m_ID, packetSize) };
-						m_HandleCallback(reinterpret_cast<PacketHeader*>(ptr), packetSize);
+						m_HandleCallback(this, endpoint, ptr, packetSize);
 					}
 					freeReadPacket(header->m_ID);
 				}
@@ -210,7 +210,7 @@ namespace ReliableUDP
 		while (m_SendPacket != lastPacket && m_ToSend)
 		{
 			WritePacketInfo& info { m_WritePacketInfos[m_SendPacket] };
-			if (info.m_Ready && !info.m_Time.time_since_epoch().count() || canSendOldPackets)
+			if (info.m_Ready && (!info.m_Time.time_since_epoch().count() || canSendOldPackets))
 			{
 				std::uint32_t requiredSections { getRequiredSections(info.m_Size) };
 				while (m_SendIndex < requiredSections && m_ToSend)
@@ -737,7 +737,10 @@ namespace ReliableUDP
 
 		info.m_Time = Clock::now();
 
-		std::memcpy(m_ReadBuffer + info.m_Start, m_ReadBuffer + sizeof(PacketHeader), std::min(4096 - sizeof(PacketHeader), info.m_Size - index * (4096 - sizeof(PacketHeader))));
+		std::uint32_t offset = index * (4096U - sizeof(PacketHeader));
+		std::uint32_t size   = std::min<std::uint32_t>(4096U - sizeof(PacketHeader), info.m_Size - offset);
+
+		std::memcpy(m_ReadBuffer + info.m_Start + offset, m_ReadBuffer + sizeof(PacketHeader), size);
 
 		return true;
 	}
