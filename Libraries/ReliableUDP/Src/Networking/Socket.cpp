@@ -210,6 +210,29 @@ namespace ReliableUDP::Networking
 #endif
 	}
 
+	static bool IsErrorCodeCloseBased(std::uint32_t errorCode)
+	{
+		switch (errorCode)
+		{
+#if BUILD_IS_SYSTEM_WINDOWS
+		case WSANOTINITIALISED: [[fallthrough]];
+		case WSAENETDOWN: [[fallthrough]];
+		case WSAENOTCONN: [[fallthrough]];
+		case WSAENETRESET: [[fallthrough]];
+		case WSAENOTSOCK: [[fallthrough]];
+		case WSAESHUTDOWN: [[fallthrough]];
+		case WSAECONNABORTED: [[fallthrough]];
+		case WSAECONNRESET:
+#else
+		case ECONNREFUSED: [[fallthrough]];
+		case ENOTCONN: [[fallthrough]];
+		case ENOTSOCK:
+#endif
+			return true;
+		default: return false;
+		}
+	}
+
 	static int GetNativeSocketType(ESocketType type)
 	{
 		switch (type)
@@ -294,15 +317,17 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = Receive(m_Socket, data, len, 0);
-			if (r < 0)
+			if (r == 0)
+			{
+				close();
+			}
+			else if (r < 0)
 			{
 				auto errorCode = LastError();
-				switch (errorCode)
-				{ // TODO(MarcasRealAccount): Implement error closing error codes
-				default:
+				if (IsErrorCodeCloseBased(errorCode))
+					close();
+				else
 					reportError(errorCode);
-					break;
-				}
 			}
 
 			if (r <= 0)
@@ -325,15 +350,18 @@ namespace ReliableUDP::Networking
 		std::size_t      addrSize = sizeof(addr);
 
 		auto r = ReceiveFrom(m_Socket, buf, len, 0, &addr, &addrSize);
-		if (r < 0)
+		if (r == 0)
+		{
+			close();
+			return 0;
+		}
+		else if (r < 0)
 		{
 			auto errorCode = LastError();
-			switch (errorCode)
-			{ // TODO(MarcasRealAccount): Implement error closing error codes
-			default:
+			if (IsErrorCodeCloseBased(errorCode))
+				close();
+			else
 				reportError(errorCode);
-				break;
-			}
 			return 0;
 		}
 		else
@@ -354,15 +382,17 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = Send(m_Socket, data, len, 0);
-			if (r < 0)
+			if (r == 0)
+			{
+				close();
+			}
+			else if (r < 0)
 			{
 				auto errorCode = LastError();
-				switch (errorCode)
-				{ // TODO(MarcasRealAccount): Implement error closing error codes
-				default:
+				if (IsErrorCodeCloseBased(errorCode))
+					close();
+				else
 					reportError(errorCode);
-					break;
-				}
 			}
 
 			if (r <= 0)
@@ -390,15 +420,17 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = SendTo(m_Socket, data, len, 0, &addr, sizeof(addr));
-			if (r < 0)
+			if (r == 0)
+			{
+				close();
+			}
+			else if (r < 0)
 			{
 				auto errorCode = LastError();
-				switch (errorCode)
-				{ // TODO(MarcasRealAccount): Implement error closing error codes
-				default:
+				if (IsErrorCodeCloseBased(errorCode))
+					close();
+				else
 					reportError(errorCode);
-					break;
-				}
 			}
 
 			if (r <= 0)

@@ -1,19 +1,61 @@
-#include <ReliableUDP/Networking/Socket.h>
+#include <ReliableUDP/PacketHandler.h>
 
 #include <csignal>
 
 #include <iostream>
 #include <thread>
 
-ReliableUDP::Networking::Socket socket { ReliableUDP::Networking::ESocketType::TCP };
+void serverPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
+{
+	std::uint16_t id       = 0U;
+	std::uint8_t* response = handler->allocateWritePacket(size, id);
+	if (!response)
+		return;
+	std::memcpy(response, packet, size);
+	handler->setPacketEndpoint(id, endpoint);
+	handler->markWritePacketReady(id);
+}
+
+void clientPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
+{
+	std::string_view str { reinterpret_cast<char*>(packet), size };
+	std::cout << str << '\n';
+}
+
+void socketErrorHandler(ReliableUDP::Networking::Socket* socket, std::uint32_t errorCode)
+{
+	std::cout << "Socket Error " << errorCode << "\n";
+}
+
+ReliableUDP::PacketHandler server { 45056, 45056, 64, 64, 8, &serverPacketHandler, nullptr };
+bool                       running  = true;
+bool                       serverUp = false;
 
 extern "C" void signalHandler(int signal)
 {
 	if (signal == SIGINT)
+		running = false;
+}
+
+void serverFunc()
+{
+	auto& socket = server.getSocket();
+
+	socket.setErrorCallback(&socketErrorHandler, nullptr);
+
+	socket.setLocalEndpoint({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 });
+
+	if (!socket.open())
 	{
-		socket.close();
-		std::cout << "Hosting closed\n";
-		std::exit(0);
+		std::cout << "Failed to open socket!\n";
+		return;
+	}
+
+	std::cout << "Server opened!\n";
+	serverUp = true;
+	while (running)
+	{
+		server.updatePackets();
 	}
 }
 
@@ -21,41 +63,40 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 {
 	std::signal(SIGINT, &signalHandler);
 
-	using namespace ReliableUDP::Networking;
-	socket.setErrorCallback(
-	    []([[maybe_unused]] Socket* sock, std::uint32_t errorCode)
-	    {
-		    std::cout << "Error " << errorCode << "\n";
-	    },
-	    nullptr);
+	std::thread serverThread { &serverFunc };
 
-	socket.setLocalEndpoint({ "localhost", "http", EAddressType::IPv4 });
+	while (!serverUp)
+		;
 
-	if (!socket.open())
+	ReliableUDP::PacketHandler client { 45056, 45056, 64, 64, 8, &clientPacketHandler, nullptr };
+
+	auto& socket = client.getSocket();
+
+	socket.setErrorCallback(&socketErrorHandler, nullptr);
+
+	if (!socket.connect({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 }))
 	{
-		std::cout << "Failed to open socket!\n";
+		std::cout << "Failed to connect socket!\n";
+		running = false;
+		serverThread.join();
 		return 1;
 	}
 
-	if (!socket.listen(10))
+	std::cout << "Client connected!\n";
+
+	while (running)
 	{
-		std::cout << "Failed to listen on connections!\n";
-		return 2;
+		std::string str;
+		std::getline(std::cin, str);
+		std::uint16_t id;
+		std::uint8_t* packet = client.allocateWritePacket(str.size(), id);
+		client.setPacketEndpoint(id, socket.getRemoteEndpoint());
+		std::memcpy(packet, str.data(), str.size());
+		client.markWritePacketReady(id);
+
+		client.updatePackets();
 	}
 
-	std::cout << "Hosting on " << socket.getLocalEndpoint().toString() << "\n";
-
-	std::string website = "HTTP/1.0 200 OK\nContent-Type: text/html\n\n<html><head><title>Hehe</title></head><body><p3>DUDE THIS GO BRR</p3></body></html>";
-
-	while (true)
-	{
-		auto client = socket.accept();
-		if (client.isOpen())
-		{
-			std::cout << "Client connected from " << client.getRemoteEndpoint().toString() << "\n";
-			client.write(website.data(), website.size());
-			using namespace std::chrono_literals;
-			std::this_thread::sleep_for(10ms);
-		}
-	}
+	serverThread.join();
+	return 0;
 }
