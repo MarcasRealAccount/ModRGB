@@ -149,6 +149,16 @@ namespace ReliableUDP::Networking
 #endif
 	}
 
+	static int SetNonBlocking(std::uintptr_t socket, bool nonBlocking)
+	{
+#if BUILD_IS_SYSTEM_WINDOWS
+		u_long mode = nonBlocking;
+		return ::ioctlsocket(static_cast<SOCKET>(socket), FIONBIO, &mode);
+#else
+		return ::fcntl(static_cast<int>(socket), F_SETFL, ::fcntl(static_cast<int>(socket), F_GETFL, 0) | O_NONBLOCK);
+#endif
+	}
+
 	static std::make_signed_t<std::size_t> Receive(std::uintptr_t socket, void* buf, std::size_t len, int flags)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
@@ -222,14 +232,31 @@ namespace ReliableUDP::Networking
 		case WSAENOTSOCK: [[fallthrough]];
 		case WSAESHUTDOWN: [[fallthrough]];
 		case WSAECONNABORTED: [[fallthrough]];
+		case WSAETIMEDOUT: [[fallthrough]];
 		case WSAECONNRESET:
 #else
-		case ECONNREFUSED: [[fallthrough]];
 		case ENOTCONN: [[fallthrough]];
-		case ENOTSOCK:
+		case ENOTSOCK: [[fallthrough]];
+		case ETIMEDOUT: [[fallthrough]];
+		case ECONNRESET:
 #endif
 			return true;
 		default: return false;
+		}
+	}
+
+	static bool IsErrorCodeAnError(std::uint32_t errorCode)
+	{
+		switch (errorCode)
+		{
+#if BUILD_IS_SYSTEM_WINDOWS
+		case WSAEWOULDBLOCK:
+#else
+		case EAGAIN: [[fallthrough]];
+		case EWOULDBLOCK:
+#endif
+			return false;
+		default: return true;
 		}
 	}
 
@@ -295,7 +322,7 @@ namespace ReliableUDP::Networking
 	}
 
 	Socket::Socket(Socket&& move) noexcept
-	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Socket(move.m_Socket), m_ErrorCallback(move.m_ErrorCallback), m_UserData(move.m_UserData)
+	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_NonBlocking(move.m_NonBlocking), m_Socket(move.m_Socket), m_ErrorCallback(move.m_ErrorCallback), m_UserData(move.m_UserData)
 	{
 		move.m_Socket = ~0ULL;
 	}
@@ -326,7 +353,7 @@ namespace ReliableUDP::Networking
 				auto errorCode = LastError();
 				if (IsErrorCodeCloseBased(errorCode))
 					close();
-				else
+				else if (IsErrorCodeAnError(errorCode))
 					reportError(errorCode);
 			}
 
@@ -360,7 +387,7 @@ namespace ReliableUDP::Networking
 			auto errorCode = LastError();
 			if (IsErrorCodeCloseBased(errorCode))
 				close();
-			else
+			else if (IsErrorCodeAnError(errorCode))
 				reportError(errorCode);
 			return 0;
 		}
@@ -391,7 +418,7 @@ namespace ReliableUDP::Networking
 				auto errorCode = LastError();
 				if (IsErrorCodeCloseBased(errorCode))
 					close();
-				else
+				else if (IsErrorCodeAnError(errorCode))
 					reportError(errorCode);
 			}
 
@@ -429,7 +456,7 @@ namespace ReliableUDP::Networking
 				auto errorCode = LastError();
 				if (IsErrorCodeCloseBased(errorCode))
 					close();
-				else
+				else if (IsErrorCodeAnError(errorCode))
 					reportError(errorCode);
 			}
 
@@ -476,6 +503,9 @@ namespace ReliableUDP::Networking
 		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
 			reportError(LastError());
 		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
+			reportError(LastError());
+
+		if (SetNonBlocking(m_Socket, m_NonBlocking) < 0)
 			reportError(LastError());
 
 		return true;
@@ -554,6 +584,9 @@ namespace ReliableUDP::Networking
 		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
 			reportError(LastError());
 
+		if (SetNonBlocking(m_Socket, m_NonBlocking) < 0)
+			reportError(LastError());
+
 		std::size_t addrSize = sizeof(addr);
 		if (GetSockName(m_Socket, &addr, &addrSize) < 0)
 		{
@@ -592,6 +625,7 @@ namespace ReliableUDP::Networking
 
 		socket.setWriteTimeout(m_WriteTimeout);
 		socket.setReadTimeout(m_ReadTimeout);
+		socket.setNonBlocking(m_NonBlocking);
 
 		socket.m_Socket = Accept(m_Socket, &addr, &addrSize);
 		if (!socket.isOpen())
@@ -603,6 +637,9 @@ namespace ReliableUDP::Networking
 		if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
 			reportError(LastError());
 		if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
+			reportError(LastError());
+
+		if (SetNonBlocking(socket.m_Socket, socket.m_NonBlocking))
 			reportError(LastError());
 
 		ToEndpoint(socket.m_RemoteEndpoint, &addr);
@@ -658,6 +695,21 @@ namespace ReliableUDP::Networking
 		else
 		{
 			m_ReadTimeout = timeout;
+		}
+	}
+
+	void Socket::setNonBlocking(bool nonBlocking)
+	{
+		if (isOpen())
+		{
+			if (SetNonBlocking(m_Socket, nonBlocking) < 0)
+				reportError(LastError());
+			else
+				m_NonBlocking = nonBlocking;
+		}
+		else
+		{
+			m_NonBlocking = nonBlocking;
 		}
 	}
 

@@ -45,6 +45,8 @@ void serverFunc()
 
 	socket.setLocalEndpoint({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 });
 
+	socket.setNonBlocking(true);
+
 	if (!socket.open())
 	{
 		std::cout << "Failed to open socket!\n";
@@ -53,7 +55,7 @@ void serverFunc()
 
 	std::cout << "Server opened!\n";
 	serverUp = true;
-	while (running)
+	while (socket.isOpen() && running)
 	{
 		server.updatePackets();
 	}
@@ -74,6 +76,8 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	socket.setErrorCallback(&socketErrorHandler, nullptr);
 
+	socket.setNonBlocking(true);
+
 	if (!socket.connect({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 }))
 	{
 		std::cout << "Failed to connect socket!\n";
@@ -84,7 +88,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	std::cout << "Client connected!\n";
 
-	while (running)
+	while (socket.isOpen() && running)
 	{
 		std::string str;
 		std::getline(std::cin, str);

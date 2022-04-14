@@ -46,6 +46,9 @@ namespace ReliableUDP
 
 	void PacketHandler::updatePackets()
 	{
+		if (!m_Socket.isOpen())
+			return;
+
 		Clock::time_point now = Clock::now();
 		for (std::uint32_t i { 0 }; i < m_MaxReadPackets; ++i)
 		{

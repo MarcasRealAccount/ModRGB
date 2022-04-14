@@ -42,6 +42,7 @@ namespace ReliableUDP::Networking
 		void setLocalEndpoint(Endpoint endpoint);
 		void setWriteTimeout(std::uint32_t timeout);
 		void setReadTimeout(std::uint32_t timeout);
+		void setNonBlocking(bool nonBlocking = true);
 		void setErrorCallback(ErrorReportCallback callback, void* userData);
 
 		auto getType() const { return m_Type; }
@@ -49,6 +50,7 @@ namespace ReliableUDP::Networking
 		auto getRemoteEndpoint() const { return m_RemoteEndpoint; }
 		auto getWriteTimeout() const { return m_WriteTimeout; }
 		auto getReadTimeout() const { return m_ReadTimeout; }
+		auto isNonBlocking() const { return m_NonBlocking; }
 		auto getSocket() const { return m_Socket; }
 		bool isOpen() const { return m_Socket != ~0ULL; }
 		auto getErrorCallback() const { return m_ErrorCallback; }
@@ -64,6 +66,7 @@ namespace ReliableUDP::Networking
 
 		std::uint32_t m_WriteTimeout;
 		std::uint32_t m_ReadTimeout;
+		bool          m_NonBlocking;
 
 		std::uintptr_t m_Socket;
 
