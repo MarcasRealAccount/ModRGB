@@ -127,10 +127,75 @@ namespace ReliableUDP
 				}
 				break;
 			}
-			// TODO(MarcasRealAccount): Implement the rest of types
-			case EPacketHeaderType::Acknowledge: break;
-			case EPacketHeaderType::Reject: break;
-			case EPacketHeaderType::MaxSize: break;
+			case EPacketHeaderType::Acknowledge:
+			{
+				auto acknowledgeHeader { reinterpret_cast<AcknowledgePacketHeader*>(m_ReadBuffer) };
+
+				std::uint32_t i { 0U };
+				for (; i < m_MaxWritePackets; ++i)
+					if (m_WritePacketInfos[i].m_ID == acknowledgeHeader->m_ID)
+						break;
+
+				if (i == m_MaxWritePackets)
+					continue;
+
+				WritePacketInfo& info = m_WritePacketInfos[i];
+				if (info.m_Rev != acknowledgeHeader->m_Rev)
+					continue;
+
+				if (info.m_Size > 32 * (4096 - sizeof(PacketHeader)))
+				{
+					if (acknowledgeHeader->m_Index >= getRequiredSections(info.m_Size))
+						continue;
+
+					std::uint32_t bit  = acknowledgeHeader->m_Index % 8;
+					std::uint32_t byte = acknowledgeHeader->m_Index / 8;
+
+					info.m_BitsDynamic[byte] |= 1 << bit;
+				}
+				else
+				{
+					info.m_Bits |= 1 << acknowledgeHeader->m_Index;
+				}
+
+				info.m_Time = Clock::now();
+
+				break;
+			}
+			case EPacketHeaderType::Reject:
+			{
+				auto rejectHeader { reinterpret_cast<RejectPacketHeader*>(m_ReadBuffer) };
+
+				std::uint32_t i { 0U };
+				for (; i < m_MaxWritePackets; ++i)
+					if (m_WritePacketInfos[i].m_ID == rejectHeader->m_ID)
+						break;
+
+				if (i == m_MaxWritePackets)
+					continue;
+
+				WritePacketInfo& info = m_WritePacketInfos[i];
+				if (info.m_Rev == rejectHeader->m_Rev)
+				{
+					// TODO(MarcasRealAccount): Report premature packet rejection
+					freeWritePacket(rejectHeader->m_ID);
+				}
+
+				break;
+			}
+			case EPacketHeaderType::MaxSize:
+			{
+				auto maxSizeHeader { reinterpret_cast<MaxSizePacketHeader*>(m_ReadBuffer) };
+				if (!maxSizeHeader->m_Size)
+				{
+					sendMaxSizePacket(endpoint, maxSizeHeader->m_ID);
+				}
+				else
+				{
+					// TODO(MarcasRealAccount): What to do here???
+				}
+				break;
+			}
 			}
 		}
 
