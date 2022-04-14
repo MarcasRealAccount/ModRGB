@@ -56,7 +56,7 @@ namespace ReliableUDP
 			if (!info.m_ID)
 				continue;
 
-			if (std::chrono::duration_cast<std::chrono::duration<float>>(now - info.m_Time).count() >= m_ReadTimeout)
+			if (info.m_Time.time_since_epoch().count() && std::chrono::duration_cast<std::chrono::duration<float>>(now - info.m_Time).count() >= m_ReadTimeout)
 			{
 				freeReadPacket(info.m_ID);
 			}
@@ -68,7 +68,7 @@ namespace ReliableUDP
 			if (!info.m_ID || !info.m_Ready)
 				continue;
 
-			if (std::chrono::duration_cast<std::chrono::duration<float>>(now - info.m_Time).count() >= m_WriteTimeout)
+			if (info.m_Time.time_since_epoch().count() && std::chrono::duration_cast<std::chrono::duration<float>>(now - info.m_Time).count() >= m_WriteTimeout)
 			{
 				freeWritePacket(info.m_ID);
 			}
@@ -216,22 +216,32 @@ namespace ReliableUDP
 			if (info.m_Ready && (!info.m_Time.time_since_epoch().count() || canSendOldPackets))
 			{
 				std::uint32_t requiredSections { getRequiredSections(info.m_Size) };
-				while (m_SendIndex < requiredSections && m_ToSend)
+				if (m_ToSend)
 				{
 					switch (info.m_Type)
 					{
 					case EPacketHeaderType::Normal:
 					{
-						std::uint32_t offset { m_SendIndex * (4096 - sizeof(PacketHeader)) };
-						std::uint32_t size { std::min<std::uint32_t>(4096 - sizeof(PacketHeader), info.m_Size - offset) };
-						auto          header { reinterpret_cast<PacketHeader*>(m_WriteBuffer) };
-						*header         = {};
-						header->m_ID    = info.m_ID;
-						header->m_Index = m_SendIndex;
-						header->m_Rev   = info.m_Rev;
-						header->m_Size  = info.m_Size;
-						std::memcpy(m_WriteBuffer, m_WriteBuffer + info.m_Start + offset, size);
-						m_Socket.writeTo(m_WriteBuffer, size + sizeof(PacketHeader), info.m_Endpoint);
+						while (m_SendIndex < requiredSections && m_ToSend)
+						{
+							std::uint32_t offset { m_SendIndex * (4096 - sizeof(PacketHeader)) };
+							std::uint32_t size { std::min<std::uint32_t>(4096 - sizeof(PacketHeader), info.m_Size - offset) };
+							auto          header { reinterpret_cast<PacketHeader*>(m_WriteBuffer) };
+							*header         = {};
+							header->m_ID    = info.m_ID;
+							header->m_Index = m_SendIndex;
+							header->m_Rev   = info.m_Rev;
+							header->m_Size  = info.m_Size;
+							std::memcpy(m_WriteBuffer + sizeof(PacketHeader), m_WriteBuffer + info.m_Start + offset, size);
+							m_Socket.writeTo(m_WriteBuffer, size + sizeof(PacketHeader), info.m_Endpoint);
+							++m_SendIndex;
+						}
+
+						if (m_SendIndex >= requiredSections)
+						{
+							m_SendIndex  = 0U;
+							m_SendPacket = (m_SendPacket + 1) % m_MaxWritePackets;
+						}
 						break;
 					}
 					case EPacketHeaderType::Acknowledge:
@@ -242,6 +252,7 @@ namespace ReliableUDP
 						header->m_Index = info.m_Index;
 						header->m_Rev   = info.m_Rev;
 						m_Socket.writeTo(m_WriteBuffer, sizeof(AcknowledgePacketHeader), info.m_Endpoint);
+						m_SendPacket = (m_SendPacket + 1) % m_MaxWritePackets;
 						break;
 					}
 					case EPacketHeaderType::Reject:
@@ -252,6 +263,7 @@ namespace ReliableUDP
 						header->m_Index = 0U;
 						header->m_Rev   = info.m_Rev;
 						m_Socket.writeTo(m_WriteBuffer, sizeof(RejectPacketHeader), info.m_Endpoint);
+						m_SendPacket = (m_SendPacket + 1) % m_MaxWritePackets;
 						break;
 					}
 					case EPacketHeaderType::MaxSize:
@@ -261,17 +273,10 @@ namespace ReliableUDP
 						header->m_ID   = info.m_ID;
 						header->m_Size = m_ReadBufferSize - 4096U;
 						m_Socket.writeTo(m_WriteBuffer, sizeof(MaxSizePacketHeader), info.m_Endpoint);
+						m_SendPacket = (m_SendPacket + 1) % m_MaxWritePackets;
 						break;
 					}
 					}
-
-					++m_SendIndex;
-				}
-
-				if (m_SendIndex >= requiredSections)
-				{
-					m_SendIndex  = 0U;
-					m_SendPacket = (m_SendPacket + 1) % m_MaxWritePackets;
 				}
 			}
 			else

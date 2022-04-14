@@ -90,13 +90,16 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	while (socket.isOpen() && running)
 	{
-		std::string str;
-		std::getline(std::cin, str);
-		std::uint16_t id;
-		std::uint8_t* packet = client.allocateWritePacket(str.size(), id);
-		client.setPacketEndpoint(id, socket.getRemoteEndpoint());
-		std::memcpy(packet, str.data(), str.size());
-		client.markWritePacketReady(id);
+		if (std::cin.peek())
+		{
+			std::string str;
+			std::getline(std::cin, str);
+			std::uint16_t id;
+			std::uint8_t* packet = client.allocateWritePacket(str.size(), id);
+			client.setPacketEndpoint(id, socket.getRemoteEndpoint());
+			std::memcpy(packet, str.data(), str.size());
+			client.markWritePacketReady(id);
+		}
 
 		client.updatePackets();
 	}
