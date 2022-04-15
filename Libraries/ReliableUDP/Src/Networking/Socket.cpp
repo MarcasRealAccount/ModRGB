@@ -8,8 +8,11 @@
 #undef FreeAddrInfo
 #undef GetNameInfo
 #else
+#include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 #endif
 
@@ -51,12 +54,37 @@ namespace ReliableUDP::Networking
 #endif
 	}
 
+	enum class EShutdownMethod
+	{
+		Receive,
+		Send,
+		Both
+	};
+
+	static int GetNativeShutdownMethod(EShutdownMethod method)
+	{
+		switch (method)
+		{
+#if BUILD_IS_SYSTEM_WINDOWS
+		case EShutdownMethod::Receive: return SD_RECEIVE;
+		case EShutdownMethod::Send: return SD_SEND;
+		case EShutdownMethod::Both: return SD_BOTH;
+		default: return SD_BOTH;
+#else
+		case EShutdownMethod::Receive: return SHUT_RD;
+		case EShutdownMethod::Send: return SHUT_WR;
+		case EShutdownMethod::Both: return SHUT_RDWR;
+		default: return SHUT_RDWR;
+#endif
+		}
+	}
+
 	static std::uintptr_t CreateSocket(int af, int type, int protocol)
 	{
 		return static_cast<std::uintptr_t>(::socket(af, type, protocol));
 	}
 
-	static std::uintptr_t CreateSocketEx(int af, int type, int protocol, void* lpProtocolInfo, std::uint32_t g, std::uint32_t dwFlags)
+	static std::uintptr_t CreateSocketEx(int af, int type, int protocol, [[maybe_unused] g] void* lpProtocolInfo, [[maybe_unused]] std::uint32_t g, [[maybe_unused]] std::uint32_t dwFlags)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
 		return static_cast<std::uintptr_t>(::WSASocketW(af, type, protocol, reinterpret_cast<LPWSAPROTOCOL_INFOW>(lpProtocolInfo), static_cast<GROUP>(g), static_cast<DWORD>(dwFlags)));
@@ -74,12 +102,12 @@ namespace ReliableUDP::Networking
 #endif
 	}
 
-	static int Shutdown(std::uintptr_t socket, int how)
+	static int Shutdown(std::uintptr_t socket, EShutdownMethod how)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
-		return ::shutdown(static_cast<SOCKET>(socket), how);
+		return ::shutdown(static_cast<SOCKET>(socket), GetNativeShutdownMethod(how));
 #else
-		return ::shutdown(static_cast<int>(socket), how);
+		return ::shutdown(static_cast<int>(socket), GetNativeShutdownMethod(how));
 #endif
 	}
 
@@ -252,8 +280,7 @@ namespace ReliableUDP::Networking
 #if BUILD_IS_SYSTEM_WINDOWS
 		case WSAEWOULDBLOCK:
 #else
-		case EAGAIN: [[fallthrough]];
-		case EWOULDBLOCK:
+		case EAGAIN:
 #endif
 			return false;
 		default: return true;
@@ -527,7 +554,7 @@ namespace ReliableUDP::Networking
 		if (!isOpen())
 			return;
 
-		if (Shutdown(m_Socket, SD_SEND) < 0)
+		if (Shutdown(m_Socket, EShutdownMethod::Send) < 0)
 			reportError(LastError());
 	}
 
@@ -536,7 +563,7 @@ namespace ReliableUDP::Networking
 		if (!isOpen())
 			return;
 
-		if (Shutdown(m_Socket, SD_RECEIVE) < 0)
+		if (Shutdown(m_Socket, EShutdownMethod::Receive) < 0)
 			reportError(LastError());
 	}
 
@@ -545,7 +572,7 @@ namespace ReliableUDP::Networking
 		if (!isOpen())
 			return;
 
-		if (Shutdown(m_Socket, SD_BOTH) < 0)
+		if (Shutdown(m_Socket, EShutdownMethod::Both) < 0)
 			reportError(LastError());
 	}
 

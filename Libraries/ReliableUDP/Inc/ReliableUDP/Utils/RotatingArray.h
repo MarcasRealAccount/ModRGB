@@ -30,7 +30,7 @@ namespace ReliableUDP::Utils
 			m_Elements[m_Index] = value;
 			m_Index             = (m_Index + 1) % N;
 		}
-		constexpr void insert(const T& value) requires !std::is_integral_v<T> && (std::is_copy_constructible_v<T> || std::is_copy_assignable_v<T>)
+		constexpr void insert(const T& value) requires (!std::is_integral_v<T>) && (std::is_copy_constructible_v<T> || std::is_copy_assignable_v<T>)
 		{
 			if constexpr (std::is_copy_constructible_v<T>)
 				new (m_Elements + m_Index) T { value };
@@ -38,7 +38,7 @@ namespace ReliableUDP::Utils
 				m_Elements[m_Index] = value;
 			m_Index = (m_Index + 1) % N;
 		}
-		constexpr void insert(T&& value) requires !std::is_integral_v<T> && (std::is_move_constructible_v<T> || std::is_move_assignable_v<T>)
+		constexpr void insert(T&& value) requires (!std::is_integral_v<T>) && (std::is_move_constructible_v<T> || std::is_move_assignable_v<T>)
 		{
 			if constexpr (std::is_move_constructible_v<T>)
 				new (m_Elements + m_Index) T { std::move(value) };
