@@ -76,7 +76,7 @@ namespace ReliableUDP
 
 		Networking::Endpoint endpoint {};
 		std::size_t          size { 0U };
-		while (size = m_Socket.readFrom(m_ReadBuffer, 4096U, endpoint))
+		while ((size = m_Socket.readFrom(m_ReadBuffer, 4096U, endpoint)))
 		{
 			if (size < 8)
 				continue;
@@ -224,7 +224,7 @@ namespace ReliableUDP
 					{
 						while (m_SendIndex < requiredSections && m_ToSend)
 						{
-							std::uint32_t offset { m_SendIndex * (4096 - sizeof(PacketHeader)) };
+							std::uint32_t offset { static_cast<std::uint32_t>(m_SendIndex * (4096 - sizeof(PacketHeader))) };
 							std::uint32_t size { std::min<std::uint32_t>(4096 - sizeof(PacketHeader), info.m_Size - offset) };
 							auto          header { reinterpret_cast<PacketHeader*>(m_WriteBuffer) };
 							*header         = {};
@@ -770,7 +770,7 @@ namespace ReliableUDP
 		if (info.m_Size > 32 * (4096 - sizeof(PacketHeader)))
 		{
 			for (std::uint32_t byte = 0; byte < (getRequiredSections(info.m_Size) + 7) / 8; ++byte)
-				if (info.m_BitsDynamic[byte] != ~0U)
+				if (info.m_BitsDynamic[byte] != static_cast<std::uint8_t>(~0U))
 					return false;
 			return true;
 		}

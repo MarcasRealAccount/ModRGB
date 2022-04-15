@@ -9,7 +9,7 @@ namespace ReliableUDP::Utils
 	public:
 		constexpr Version() noexcept : m_Version(0U) {}
 		constexpr Version(std::uint32_t version) noexcept : m_Version(version) {}
-		constexpr Version(std::uint32_t major, std::uint32_t minor, std::uint32_t patch) noexcept : m_Version((major & 0x3FF) << 22 | (minor & 0x3FF) << 12 | patch & 0xFFF) {}
+		constexpr Version(std::uint32_t major, std::uint32_t minor, std::uint32_t patch) noexcept : m_Version((major & 0x3FF) << 22 | (minor & 0x3FF) << 12 | (patch & 0xFFF)) {}
 
 		constexpr operator std::uint32_t() const noexcept { return m_Version; }
 

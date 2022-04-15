@@ -84,7 +84,7 @@ namespace ReliableUDP::Networking
 		return static_cast<std::uintptr_t>(::socket(af, type, protocol));
 	}
 
-	static std::uintptr_t CreateSocketEx(int af, int type, int protocol, [[maybe_unused] g] void* lpProtocolInfo, [[maybe_unused]] std::uint32_t g, [[maybe_unused]] std::uint32_t dwFlags)
+	static std::uintptr_t CreateSocketEx(int af, int type, int protocol, [[maybe_unused]] void* lpProtocolInfo, [[maybe_unused]] std::uint32_t g, [[maybe_unused]] std::uint32_t dwFlags)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
 		return static_cast<std::uintptr_t>(::WSASocketW(af, type, protocol, reinterpret_cast<LPWSAPROTOCOL_INFOW>(lpProtocolInfo), static_cast<GROUP>(g), static_cast<DWORD>(dwFlags)));
@@ -183,7 +183,8 @@ namespace ReliableUDP::Networking
 		u_long mode = nonBlocking;
 		return ::ioctlsocket(static_cast<SOCKET>(socket), FIONBIO, &mode);
 #else
-		return ::fcntl(static_cast<int>(socket), F_SETFL, ::fcntl(static_cast<int>(socket), F_GETFL, 0) | O_NONBLOCK);
+		int mode = (::fcntl(static_cast<int>(socket), F_GETFL, 0) & ~O_NONBLOCK) | (nonBlocking * O_NONBLOCK);
+		return ::fcntl(static_cast<int>(socket), F_SETFL, mode);
 #endif
 	}
 
@@ -307,10 +308,11 @@ namespace ReliableUDP::Networking
 		}
 	}
 
-	static void ToSockAddr(const Endpoint& endpoint, sockaddr_storage* addr)
+	static void ToSockAddr(const Endpoint& endpoint, sockaddr_storage* addr, std::size_t* addrSize)
 	{
 		if (endpoint.isIPv4())
 		{
+			*addrSize             = sizeof(sockaddr_in);
 			sockaddr_in* ipv4     = reinterpret_cast<sockaddr_in*>(addr);
 			ipv4->sin_family      = AF_INET;
 			ipv4->sin_port        = htons(endpoint.m_Port);
@@ -318,12 +320,17 @@ namespace ReliableUDP::Networking
 		}
 		else
 		{
+			*addrSize          = sizeof(sockaddr_in6);
 			sockaddr_in6* ipv6 = reinterpret_cast<sockaddr_in6*>(addr);
 			ipv6->sin6_family  = AF_INET6;
 			ipv6->sin6_port    = htons(endpoint.m_Port);
 			for (std::size_t i = 0; i < 16; ++i)
 				ipv6->sin6_addr.s6_addr[i] = endpoint.m_Address.m_IPv6.m_Bytes[15 - i];
 		}
+
+#if !BUILD_IS_SYSTEM_WINDOWS
+		addr->ss_len = static_cast<std::uint8_t>(*addrSize);
+#endif
 	}
 
 	static void ToEndpoint(Endpoint& endpoint, const sockaddr_storage* addr)
@@ -466,14 +473,15 @@ namespace ReliableUDP::Networking
 			return 0U;
 
 		sockaddr_storage addr {};
-		ToSockAddr(endpoint, &addr);
+		std::size_t      addrSize = sizeof(addr);
+		ToSockAddr(endpoint, &addr, &addrSize);
 
 		const std::uint8_t* data   = reinterpret_cast<const std::uint8_t*>(buf);
 		std::size_t         offset = 0;
 
 		while (len != 0)
 		{
-			auto r = SendTo(m_Socket, data, len, 0, &addr, sizeof(addr));
+			auto r = SendTo(m_Socket, data, len, 0, &addr, addrSize);
 			if (r == 0)
 			{
 				close();
@@ -518,9 +526,10 @@ namespace ReliableUDP::Networking
 		}
 
 		sockaddr_storage addr {};
-		ToSockAddr(m_LocalEndpoint, &addr);
+		std::size_t      addrSize = sizeof(addr);
+		ToSockAddr(m_LocalEndpoint, &addr, &addrSize);
 
-		if (Bind(m_Socket, &addr, sizeof(addr)) < 0)
+		if (Bind(m_Socket, &addr, addrSize) < 0)
 		{
 			reportError(LastError());
 			close();
@@ -596,9 +605,10 @@ namespace ReliableUDP::Networking
 		}
 
 		sockaddr_storage addr {};
-		ToSockAddr(endpoint, &addr);
+		std::size_t      addrSize = sizeof(addr);
+		ToSockAddr(endpoint, &addr, &addrSize);
 
-		if (Connect(m_Socket, &addr, sizeof(addr)) < 0)
+		if (Connect(m_Socket, &addr, addrSize) < 0)
 		{
 			reportError(LastError());
 			close();
@@ -614,7 +624,6 @@ namespace ReliableUDP::Networking
 		if (SetNonBlocking(m_Socket, m_NonBlocking) < 0)
 			reportError(LastError());
 
-		std::size_t addrSize = sizeof(addr);
 		if (GetSockName(m_Socket, &addr, &addrSize) < 0)
 		{
 			reportError(LastError());
@@ -802,8 +811,9 @@ namespace ReliableUDP::Networking
 		std::string      hostName    = std::string(NI_MAXHOST, '\0');
 		std::string      serviceName = std::string(NI_MAXSERV, '\0');
 		sockaddr_storage addr {};
-		ToSockAddr(endpoint, &addr);
-		if (GetNameInfo(&addr, sizeof(addr), hostName.data(), hostName.size(), serviceName.data(), serviceName.size(), 0) < 0)
+		std::size_t      addrSize = sizeof(addr);
+		ToSockAddr(endpoint, &addr, &addrSize);
+		if (GetNameInfo(&addr, addrSize, hostName.data(), hostName.size(), serviceName.data(), serviceName.size(), 0) < 0)
 			return "UnknownHost";
 		return serviceName + "://" + hostName;
 	}
