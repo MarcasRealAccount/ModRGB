@@ -72,7 +72,6 @@ static bool IsCINReady()
 	int            fd = ::fileno(stdin);
 	fd_set         fdset {};
 	struct timeval timeout;
-	int            ret;
 	FD_SET(fd, &fdset);
 	timeout.tv_sec  = 0;
 	timeout.tv_usec = 1;

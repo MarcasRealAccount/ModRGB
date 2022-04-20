@@ -53,10 +53,19 @@ namespace ReliableUDP::Networking
 		Address(IPv4Address address) : m_IPv6(address.m_Value, 0U, 0U, 0U, 0U, 0U) {}
 		Address(IPv6Address address) : m_IPv6(address) {}
 
-		bool         isIPv4() const { return getType() == EAddressType::IPv4; }
+		bool isIPv4() const { return getType() == EAddressType::IPv4; }
+		bool isValid() const
+		{
+			for (std::size_t i = 0; i < 16; ++i)
+				if (m_IPv6.m_Bytes[i] != 0)
+					return true;
+			return false;
+		}
 		EAddressType getType() const;
 
 		std::string toString() const;
+
+		bool operator==(Address other) const;
 
 	public:
 		union

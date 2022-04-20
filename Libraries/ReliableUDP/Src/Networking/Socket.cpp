@@ -471,7 +471,17 @@ namespace ReliableUDP::Networking
 		sockaddr_storage addr {};
 		std::size_t      addrSize = sizeof(addr);
 
-		auto r = ReceiveFrom(m_Socket, buf, len, 0, &addr, &addrSize);
+		std::size_t r = 0U;
+		if (isConnected())
+		{
+			r = Receive(m_Socket, buf, len, 0);
+			ToSockAddr(m_RemoteEndpoint, &addr, &addrSize);
+		}
+		else
+		{
+			r = ReceiveFrom(m_Socket, buf, len, 0, &addr, &addrSize);
+		}
+
 		if (r == 0)
 		{
 			close();
@@ -532,6 +542,20 @@ namespace ReliableUDP::Networking
 	{
 		if (!isBound())
 			return 0U;
+
+		if (isConnected())
+		{
+			if (endpoint == m_RemoteEndpoint)
+			{
+				return write(buf, len);
+			}
+			else
+			{
+				reportError(ESocketError::AlreadyConnected);
+				return 0U;
+			}
+		}
+
 
 		sockaddr_storage addr {};
 		std::size_t      addrSize = sizeof(addr);
@@ -826,8 +850,13 @@ namespace ReliableUDP::Networking
 
 	void Socket::reportError(std::uint32_t errorCode)
 	{
+		reportError(GetSocketError(errorCode));
+	}
+
+	void Socket::reportError(ESocketError error)
+	{
 		if (m_ErrorCallback)
-			m_ErrorCallback(this, m_UserData, GetSocketError(errorCode));
+			m_ErrorCallback(this, m_UserData, error);
 	}
 
 	//------------

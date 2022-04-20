@@ -21,10 +21,13 @@ namespace ReliableUDP::Networking
 		Endpoint(std::string_view node, std::string_view service, EAddressType type = EAddressType::Both);
 
 		bool         isIPv4() const { return m_Address.isIPv4(); }
+		bool         isValid() const { return m_Address.isValid(); }
 		EAddressType getType() const { return m_Address.getType(); }
 
 		std::string toString() const;
 		std::string toHost() const;
+
+		bool operator==(Endpoint other) const;
 
 	public:
 		Address       m_Address;

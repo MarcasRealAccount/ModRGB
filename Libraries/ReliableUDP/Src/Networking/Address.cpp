@@ -77,4 +77,9 @@ namespace ReliableUDP::Networking
 			return str;
 		}
 	}
+
+	bool Address::operator==(Address other) const
+	{
+		return memcmp(m_IPv6.m_Bytes, other.m_IPv6.m_Bytes, 16) == 0;
+	}
 } // namespace ReliableUDP::Networking

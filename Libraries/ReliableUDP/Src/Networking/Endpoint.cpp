@@ -29,4 +29,9 @@ namespace ReliableUDP::Networking
 	{
 		return ToHost(*this);
 	}
+
+	bool Endpoint::operator==(Endpoint other) const
+	{
+		return m_Address == other.m_Address && m_Port == other.m_Port;
+	}
 } // namespace ReliableUDP::Networking

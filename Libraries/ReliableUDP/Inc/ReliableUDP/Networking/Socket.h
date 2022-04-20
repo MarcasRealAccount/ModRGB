@@ -79,11 +79,13 @@ namespace ReliableUDP::Networking
 		auto isNonBlocking() const { return m_ReadTimeout == 0 || m_WriteTimeout == 0; }
 		auto getSocket() const { return m_Socket; }
 		bool isBound() const { return m_Socket != ~0ULL; }
+		bool isConnected() const { return m_RemoteEndpoint.isValid(); }
 		auto getErrorCallback() const { return m_ErrorCallback; }
 		auto getUserData() const { return m_UserData; }
 
 	private:
 		void reportError(std::uint32_t errorCode);
+		void reportError(ESocketError error);
 
 	private:
 		ESocketType m_Type;
