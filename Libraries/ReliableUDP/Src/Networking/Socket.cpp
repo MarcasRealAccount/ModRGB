@@ -177,13 +177,13 @@ namespace ReliableUDP::Networking
 #endif
 	}
 
-	static int SetNonBlocking(std::uintptr_t socket, bool nonBlocking)
+	static int SetNonBlocking(std::uintptr_t socket)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
 		u_long mode = nonBlocking;
 		return ::ioctlsocket(static_cast<SOCKET>(socket), FIONBIO, &mode);
 #else
-		int mode = (::fcntl(static_cast<int>(socket), F_GETFL, 0) & ~O_NONBLOCK) | (nonBlocking * O_NONBLOCK);
+		int mode = (::fcntl(static_cast<int>(socket), F_GETFL, 0) & ~O_NONBLOCK) | O_NONBLOCK;
 		return ::fcntl(static_cast<int>(socket), F_SETFL, mode);
 #endif
 	}
@@ -288,6 +288,42 @@ namespace ReliableUDP::Networking
 		}
 	}
 
+	static ESocketError GetSocketError(std::uint32_t errorCode)
+	{
+		switch (errorCode)
+		{
+#if BUILD_IS_SYSTEM_WINDOWS
+#else
+		case EIO: [[fallthrough]];
+		case EFAULT: [[fallthrough]];
+		case EMFILE: [[fallthrough]];
+		case ENFILE: return ESocketError::KernelError;
+		case EACCES: return ESocketError::NoAccess;
+		case EAFNOSUPPORT: return ESocketError::AFNotSupported;
+		case ENOSPC: [[fallthrough]];
+		case ENOMEM: [[fallthrough]];
+		case ENOBUFS: return ESocketError::LowMemory;
+		case EPERM: return ESocketError::InsufficientPermissions;
+		case EPROTONOSUPPORT: return ESocketError::ProtocolNotSupported;
+		case EPROTOTYPE: return ESocketError::TypeNotSupported;
+		case EINTR: return ESocketError::Interrupted;
+		case EBADF: [[fallthrough]];
+		case EINVAL: return ESocketError::InvalidArgument;
+		case EADDRINUSE: [[fallthrough]];
+		case EADDRNOTAVAIL: return ESocketError::AddressNotAvailable;
+		case ECONNREFUSED: return ESocketError::ConnectionRefused;
+		case ENETUNREACH: return ESocketError::NetworkUnreachable;
+		case EHOSTUNREACH: return ESocketError::HostUnreachable;
+		case EOPNOTSUPP: [[fallthrough]];
+		case EDESTADDRREQ: return ESocketError::ListenUnsupported;
+		case EISCONN: return ESocketError::AlreadyConnected;
+		case ENETDOWN: return ESocketError::NetworkDown;
+		case EHOSTDOWN: return ESocketError::HostDown;
+#endif
+		default: return ESocketError::Unknown;
+		}
+	}
+
 	static int GetNativeSocketType(ESocketType type)
 	{
 		switch (type)
@@ -355,21 +391,46 @@ namespace ReliableUDP::Networking
 		}
 	}
 
+	std::string_view GetSocketErrorString(ESocketError error)
+	{
+		switch (error)
+		{
+		case ESocketError::Unknown: return "Unknown error";
+		case ESocketError::KernelError: return "Kernel error";
+		case ESocketError::NoAccess: return "No access";
+		case ESocketError::AFNotSupported: return "Address family is not supported";
+		case ESocketError::LowMemory: return "Low memory, please make sure to free enough memory";
+		case ESocketError::InsufficientPermissions: return "Insufficient permissions";
+		case ESocketError::ProtocolNotSupported: return "Protocol is not supported";
+		case ESocketError::TypeNotSupported: return "Socket type is not supported";
+		case ESocketError::Interrupted: return "Socket was interrupted";
+		case ESocketError::InvalidArgument: return "Invalid argument passed to socket";
+		case ESocketError::AddressNotAvailable: return "Address is not available";
+		case ESocketError::ConnectionRefused: return "Connection was refused";
+		case ESocketError::NetworkUnreachable: return "Network is unreachable";
+		case ESocketError::HostUnreachable: return "Host is unreachable";
+		case ESocketError::ListenUnsupported: return "Listen is unsupported";
+		case ESocketError::AlreadyConnected: return "Socket is already connected";
+		case ESocketError::NetworkDown: return "Network is down";
+		case ESocketError::HostDown: return "Host is down";
+		}
+	}
+
 	Socket::Socket(Socket&& move) noexcept
-	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_NonBlocking(move.m_NonBlocking), m_Socket(move.m_Socket), m_ErrorCallback(move.m_ErrorCallback), m_UserData(move.m_UserData)
+	    : m_Type(move.m_Type), m_LocalEndpoint(move.m_LocalEndpoint), m_RemoteEndpoint(move.m_RemoteEndpoint), m_WriteTimeout(move.m_WriteTimeout), m_ReadTimeout(move.m_ReadTimeout), m_Socket(move.m_Socket), m_ErrorCallback(move.m_ErrorCallback), m_UserData(move.m_UserData)
 	{
 		move.m_Socket = ~0ULL;
 	}
 
 	Socket::~Socket()
 	{
-		if (isOpen())
+		if (isBound())
 			close();
 	}
 
 	std::size_t Socket::read(void* buf, std::size_t len)
 	{
-		if (!isOpen())
+		if (!isBound())
 			return 0U;
 
 		std::uint8_t* data   = reinterpret_cast<std::uint8_t*>(buf);
@@ -404,7 +465,7 @@ namespace ReliableUDP::Networking
 
 	std::size_t Socket::readFrom(void* buf, std::size_t len, Endpoint& endpoint)
 	{
-		if (!isOpen())
+		if (!isBound())
 			return 0U;
 
 		sockaddr_storage addr {};
@@ -434,7 +495,7 @@ namespace ReliableUDP::Networking
 
 	std::size_t Socket::write(const void* buf, std::size_t len)
 	{
-		if (!isOpen())
+		if (!isBound())
 			return 0U;
 
 		const uint8_t* data   = reinterpret_cast<const std::uint8_t*>(buf);
@@ -469,7 +530,7 @@ namespace ReliableUDP::Networking
 
 	std::size_t Socket::writeTo(const void* buf, std::size_t len, Endpoint endpoint)
 	{
-		if (!isOpen())
+		if (!isBound())
 			return 0U;
 
 		sockaddr_storage addr {};
@@ -506,9 +567,9 @@ namespace ReliableUDP::Networking
 		return offset;
 	}
 
-	bool Socket::open()
+	bool Socket::bind(Endpoint endpoint)
 	{
-		if (isOpen())
+		if (isBound())
 			return false;
 
 #if BUILD_IS_SYSTEM_WINDOWS
@@ -516,10 +577,10 @@ namespace ReliableUDP::Networking
 			return false;
 #endif
 
-		bool isIPv4 = m_LocalEndpoint.isIPv4();
+		bool isIPv4 = endpoint.isIPv4();
 
 		m_Socket = CreateSocket(isIPv4 ? AF_INET : AF_INET6, GetNativeSocketType(m_Type), GetNativeSocketProtocol(m_Type));
-		if (!isOpen())
+		if (!isBound())
 		{
 			reportError(LastError());
 			return false;
@@ -527,7 +588,7 @@ namespace ReliableUDP::Networking
 
 		sockaddr_storage addr {};
 		std::size_t      addrSize = sizeof(addr);
-		ToSockAddr(m_LocalEndpoint, &addr, &addrSize);
+		ToSockAddr(endpoint, &addr, &addrSize);
 
 		if (Bind(m_Socket, &addr, addrSize) < 0)
 		{
@@ -535,59 +596,27 @@ namespace ReliableUDP::Networking
 			close();
 			return false;
 		}
+		m_LocalEndpoint = endpoint;
 
-		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
-			reportError(LastError());
-		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
-			reportError(LastError());
-
-		if (SetNonBlocking(m_Socket, m_NonBlocking) < 0)
-			reportError(LastError());
+		if (isNonBlocking())
+		{
+			if (SetNonBlocking(m_Socket) < 0)
+				reportError(LastError());
+		}
+		else
+		{
+			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
+				reportError(LastError());
+			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
+				reportError(LastError());
+		}
 
 		return true;
 	}
 
-	void Socket::close()
-	{
-		if (!isOpen())
-			return;
-
-		if (CloseSocket(m_Socket) < 0)
-			reportError(LastError());
-		m_Socket         = ~0ULL;
-		m_RemoteEndpoint = {};
-	}
-
-	void Socket::closeW()
-	{
-		if (!isOpen())
-			return;
-
-		if (Shutdown(m_Socket, EShutdownMethod::Send) < 0)
-			reportError(LastError());
-	}
-
-	void Socket::closeR()
-	{
-		if (!isOpen())
-			return;
-
-		if (Shutdown(m_Socket, EShutdownMethod::Receive) < 0)
-			reportError(LastError());
-	}
-
-	void Socket::closeRW()
-	{
-		if (!isOpen())
-			return;
-
-		if (Shutdown(m_Socket, EShutdownMethod::Both) < 0)
-			reportError(LastError());
-	}
-
 	bool Socket::connect(Endpoint endpoint)
 	{
-		if (isOpen())
+		if (isBound())
 			return false;
 
 #if BUILD_IS_SYSTEM_WINDOWS
@@ -598,7 +627,7 @@ namespace ReliableUDP::Networking
 		bool isIPv4 = endpoint.isIPv4();
 
 		m_Socket = CreateSocketEx(isIPv4 ? AF_INET : AF_INET6, GetNativeSocketType(m_Type), GetNativeSocketProtocol(m_Type), nullptr, 0, 0x1);
-		if (!isOpen())
+		if (!isBound())
 		{
 			reportError(LastError());
 			return false;
@@ -616,29 +645,69 @@ namespace ReliableUDP::Networking
 		}
 		m_RemoteEndpoint = endpoint;
 
-		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
-			reportError(LastError());
-		if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
-			reportError(LastError());
-
-		if (SetNonBlocking(m_Socket, m_NonBlocking) < 0)
-			reportError(LastError());
-
-		if (GetSockName(m_Socket, &addr, &addrSize) < 0)
+		if (isNonBlocking())
 		{
-			reportError(LastError());
+			if (SetNonBlocking(m_Socket) < 0)
+				reportError(LastError());
 		}
 		else
 		{
-			ToEndpoint(m_LocalEndpoint, &addr);
+			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
+				reportError(LastError());
+			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
+				reportError(LastError());
 		}
+
+
+		if (GetSockName(m_Socket, &addr, &addrSize) < 0)
+			reportError(LastError());
+		else
+			ToEndpoint(m_LocalEndpoint, &addr);
 
 		return true;
 	}
 
+	void Socket::close()
+	{
+		if (!isBound())
+			return;
+
+		if (CloseSocket(m_Socket) < 0)
+			reportError(LastError());
+		m_Socket         = ~0ULL;
+		m_RemoteEndpoint = {};
+	}
+
+	void Socket::closeW()
+	{
+		if (!isBound())
+			return;
+
+		if (Shutdown(m_Socket, EShutdownMethod::Send) < 0)
+			reportError(LastError());
+	}
+
+	void Socket::closeR()
+	{
+		if (!isBound())
+			return;
+
+		if (Shutdown(m_Socket, EShutdownMethod::Receive) < 0)
+			reportError(LastError());
+	}
+
+	void Socket::closeRW()
+	{
+		if (!isBound())
+			return;
+
+		if (Shutdown(m_Socket, EShutdownMethod::Both) < 0)
+			reportError(LastError());
+	}
+
 	bool Socket::listen(std::uint32_t backlog)
 	{
-		if (!isOpen())
+		if (!isBound() && m_Type != ESocketType::TCP)
 			return false;
 
 		if (Listen(m_Socket, backlog) < 0)
@@ -653,7 +722,7 @@ namespace ReliableUDP::Networking
 	{
 		Socket socket { m_Type };
 
-		if (!isOpen())
+		if (!isBound() && m_Type != ESocketType::TCP)
 			return socket;
 
 		sockaddr_storage addr {};
@@ -661,54 +730,48 @@ namespace ReliableUDP::Networking
 
 		socket.setWriteTimeout(m_WriteTimeout);
 		socket.setReadTimeout(m_ReadTimeout);
-		socket.setNonBlocking(m_NonBlocking);
 
 		socket.m_Socket = Accept(m_Socket, &addr, &addrSize);
-		if (!socket.isOpen())
+		if (!socket.isBound())
 		{
 			reportError(LastError());
 			return socket;
 		}
 
-		if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
-			reportError(LastError());
-		if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
-			reportError(LastError());
-
-		if (SetNonBlocking(socket.m_Socket, socket.m_NonBlocking))
-			reportError(LastError());
+		if (socket.isNonBlocking())
+		{
+			if (SetNonBlocking(socket.m_Socket))
+				reportError(LastError());
+		}
+		else
+		{
+			if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_SNDTIMEO, &m_WriteTimeout, sizeof(m_WriteTimeout)) < 0)
+				reportError(LastError());
+			if (SetSockOpt(socket.m_Socket, SOL_SOCKET, SO_RCVTIMEO, &m_ReadTimeout, sizeof(m_ReadTimeout)) < 0)
+				reportError(LastError());
+		}
 
 		ToEndpoint(socket.m_RemoteEndpoint, &addr);
 
 		if (GetSockName(socket.m_Socket, &addr, &addrSize) < 0)
-		{
 			reportError(LastError());
-		}
 		else
-		{
 			ToEndpoint(socket.m_LocalEndpoint, &addr);
-		}
 
 		return socket;
 	}
 
 	void Socket::setType(ESocketType type)
 	{
-		if (!isOpen())
+		if (!isBound())
 			m_Type = type;
-	}
-
-	void Socket::setLocalEndpoint(Endpoint endpoint)
-	{
-		if (!isOpen())
-			m_LocalEndpoint = endpoint;
 	}
 
 	void Socket::setWriteTimeout(std::uint32_t timeout)
 	{
-		if (isOpen())
+		if (isBound())
 		{
-			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0)
+			if ((timeout == 0 && SetNonBlocking(m_Socket) < 0) || SetSockOpt(m_Socket, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) < 0)
 				reportError(LastError());
 			else
 				m_WriteTimeout = timeout;
@@ -721,9 +784,9 @@ namespace ReliableUDP::Networking
 
 	void Socket::setReadTimeout(std::uint32_t timeout)
 	{
-		if (isOpen())
+		if (isBound())
 		{
-			if (SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
+			if ((timeout == 0 && SetNonBlocking(m_Socket)) || SetSockOpt(m_Socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0)
 				reportError(LastError());
 			else
 				m_ReadTimeout = timeout;
@@ -734,18 +797,24 @@ namespace ReliableUDP::Networking
 		}
 	}
 
-	void Socket::setNonBlocking(bool nonBlocking)
+	void Socket::setNonBlocking()
 	{
-		if (isOpen())
+		if (isBound())
 		{
-			if (SetNonBlocking(m_Socket, nonBlocking) < 0)
+			if (SetNonBlocking(m_Socket) < 0)
+			{
 				reportError(LastError());
+			}
 			else
-				m_NonBlocking = nonBlocking;
+			{
+				m_ReadTimeout  = 0U;
+				m_WriteTimeout = 0U;
+			}
 		}
 		else
 		{
-			m_NonBlocking = nonBlocking;
+			m_ReadTimeout  = 0U;
+			m_WriteTimeout = 0U;
 		}
 	}
 
@@ -758,7 +827,7 @@ namespace ReliableUDP::Networking
 	void Socket::reportError(std::uint32_t errorCode)
 	{
 		if (m_ErrorCallback)
-			m_ErrorCallback(this, errorCode);
+			m_ErrorCallback(this, m_UserData, GetSocketError(errorCode));
 	}
 
 	//------------

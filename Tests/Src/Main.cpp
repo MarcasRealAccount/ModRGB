@@ -5,6 +5,11 @@
 #include <iostream>
 #include <thread>
 
+#if BUILD_IS_SYSTEM_WINDOWS
+#else
+#include <sys/select.h>
+#endif
+
 void serverPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
 {
 	std::uint16_t id       = 0U;
@@ -16,15 +21,15 @@ void serverPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Netwo
 	handler->markWritePacketReady(id);
 }
 
-void clientPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
+void clientPacketHandler([[maybe_unused]] ReliableUDP::PacketHandler* handler, [[maybe_unused]] ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
 {
 	std::string_view str { reinterpret_cast<char*>(packet), size };
 	std::cout << str << '\n';
 }
 
-void socketErrorHandler(ReliableUDP::Networking::Socket* socket, std::uint32_t errorCode)
+void socketErrorHandler([[maybe_unused]] ReliableUDP::Networking::Socket* socket, [[maybe_unused]] void* userData, ReliableUDP::Networking::ESocketError error)
 {
-	std::cout << "Socket Error " << errorCode << "\n";
+	std::cout << ReliableUDP::Networking::GetSocketErrorString(error) << "\n";
 }
 
 ReliableUDP::PacketHandler server { 45056, 45056, 64, 64, 8, &serverPacketHandler, nullptr };
@@ -43,11 +48,9 @@ void serverFunc()
 
 	socket.setErrorCallback(&socketErrorHandler, nullptr);
 
-	socket.setLocalEndpoint({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 });
+	socket.setNonBlocking();
 
-	socket.setNonBlocking(true);
-
-	if (!socket.open())
+	if (!socket.bind({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 }))
 	{
 		std::cout << "Failed to open socket!\n";
 		return;
@@ -55,10 +58,26 @@ void serverFunc()
 
 	std::cout << "Server opened!\n";
 	serverUp = true;
-	while (socket.isOpen() && running)
+	while (socket.isBound() && running)
 	{
 		server.updatePackets();
 	}
+}
+
+static bool IsCINReady()
+{
+#if BUILD_IS_SYSTEM_WINDOWS
+	return true;
+#else
+	int            fd = ::fileno(stdin);
+	fd_set         fdset {};
+	struct timeval timeout;
+	int            ret;
+	FD_SET(fd, &fdset);
+	timeout.tv_sec  = 0;
+	timeout.tv_usec = 1;
+	return ::select(fd + 1, &fdset, NULL, NULL, &timeout) == 1;
+#endif
 }
 
 int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
@@ -76,7 +95,7 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	socket.setErrorCallback(&socketErrorHandler, nullptr);
 
-	socket.setNonBlocking(true);
+	socket.setNonBlocking();
 
 	if (!socket.connect({ "localhost", "45252", ReliableUDP::Networking::EAddressType::IPv4 }))
 	{
@@ -88,9 +107,9 @@ int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv)
 
 	std::cout << "Client connected!\n";
 
-	while (socket.isOpen() && running)
+	while (socket.isBound() && running)
 	{
-		if (std::cin.peek())
+		if (IsCINReady())
 		{
 			std::string str;
 			std::getline(std::cin, str);

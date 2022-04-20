@@ -2,8 +2,34 @@
 
 #include "Endpoint.h"
 
+#include <string_view>
+
 namespace ReliableUDP::Networking
 {
+	enum class ESocketError : std::uint32_t
+	{
+		Unknown = 0,
+		KernelError,
+		NoAccess,
+		AFNotSupported,
+		LowMemory,
+		InsufficientPermissions,
+		ProtocolNotSupported,
+		TypeNotSupported,
+		Interrupted,
+		InvalidArgument,
+		AddressNotAvailable,
+		ConnectionRefused,
+		NetworkUnreachable,
+		HostUnreachable,
+		ListenUnsupported,
+		AlreadyConnected,
+		NetworkDown,
+		HostDown
+	};
+
+	std::string_view GetSocketErrorString(ESocketError error);
+
 	enum class ESocketType
 	{
 		TCP,
@@ -13,11 +39,11 @@ namespace ReliableUDP::Networking
 	class Socket
 	{
 	public:
-		using ErrorReportCallback = void (*)(Socket* socket, std::uint32_t errorCode);
+		using ErrorReportCallback = void (*)(Socket* socket, void* userData, ESocketError error);
 
 	public:
 		Socket() : m_Type(ESocketType::TCP), m_WriteTimeout(2000), m_ReadTimeout(2000), m_Socket(~0ULL), m_ErrorCallback(nullptr), m_UserData(nullptr) {}
-		Socket(ESocketType type) : m_Type(type), m_WriteTimeout(2000), m_ReadTimeout(2000), m_Socket(~0ULL), m_ErrorCallback(nullptr), m_UserData(nullptr) {}
+		Socket(ESocketType type, std::uint32_t writeTimeout = 2000, std::uint32_t readTimeout = 2000) : m_Type(type), m_WriteTimeout(writeTimeout), m_ReadTimeout(readTimeout), m_Socket(~0ULL), m_ErrorCallback(nullptr), m_UserData(nullptr) {}
 		Socket(Socket&& move) noexcept;
 		~Socket();
 
@@ -26,23 +52,23 @@ namespace ReliableUDP::Networking
 		std::size_t write(const void* buf, std::size_t len);
 		std::size_t writeTo(const void* buf, std::size_t len, Endpoint endpoint);
 
-		bool open();
+		bool bind(Endpoint endpoint);
+		bool connect(Endpoint endpoint);
 		void close();
 
 		void closeW();
 		void closeR();
 		void closeRW();
 
-		bool connect(Endpoint endpoint);
-
 		bool   listen(std::uint32_t backlog);
 		Socket accept();
 
 		void setType(ESocketType type);
-		void setLocalEndpoint(Endpoint endpoint);
+		// timeout == 0: Non blocking
 		void setWriteTimeout(std::uint32_t timeout);
+		// timeout == 0: Non blocking
 		void setReadTimeout(std::uint32_t timeout);
-		void setNonBlocking(bool nonBlocking = true);
+		void setNonBlocking();
 		void setErrorCallback(ErrorReportCallback callback, void* userData);
 
 		auto getType() const { return m_Type; }
@@ -50,9 +76,9 @@ namespace ReliableUDP::Networking
 		auto getRemoteEndpoint() const { return m_RemoteEndpoint; }
 		auto getWriteTimeout() const { return m_WriteTimeout; }
 		auto getReadTimeout() const { return m_ReadTimeout; }
-		auto isNonBlocking() const { return m_NonBlocking; }
+		auto isNonBlocking() const { return m_ReadTimeout == 0 || m_WriteTimeout == 0; }
 		auto getSocket() const { return m_Socket; }
-		bool isOpen() const { return m_Socket != ~0ULL; }
+		bool isBound() const { return m_Socket != ~0ULL; }
 		auto getErrorCallback() const { return m_ErrorCallback; }
 		auto getUserData() const { return m_UserData; }
 
@@ -66,7 +92,6 @@ namespace ReliableUDP::Networking
 
 		std::uint32_t m_WriteTimeout;
 		std::uint32_t m_ReadTimeout;
-		bool          m_NonBlocking;
 
 		std::uintptr_t m_Socket;
 

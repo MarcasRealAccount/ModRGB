@@ -46,7 +46,7 @@ namespace ReliableUDP
 
 	void PacketHandler::updatePackets()
 	{
-		if (!m_Socket.isOpen())
+		if (!m_Socket.isBound())
 			return;
 
 		Clock::time_point now = Clock::now();

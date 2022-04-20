@@ -20,7 +20,7 @@ namespace ReliableUDP::Utils
 		constexpr void          minor(std::uint16_t minor) noexcept { m_Version = (m_Version & 0xFFC00FFF) | (minor & 0x3FF) << 12; }
 		constexpr void          patch(std::uint16_t patch) noexcept { m_Version = (m_Version & 0xFFFFF000) | (patch & 0xFFF); }
 
-		constexpr bool isCompatible(Version other) const noexcept { return !(other.major() != major() || other.minor() > minor()); }
+		constexpr bool isCompatibleWith(Version other) const noexcept { return !(other.major() != major() || other.minor() > minor()); }
 
 	public:
 		std::uint32_t m_Version;
