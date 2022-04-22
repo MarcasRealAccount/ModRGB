@@ -7,7 +7,7 @@
 
 #if BUILD_IS_SYSTEM_WINDOWS
 #else
-#include <sys/select.h>
+#include <unistd.h>
 #endif
 
 void serverPacketHandler(ReliableUDP::PacketHandler* handler, ReliableUDP::Networking::Endpoint endpoint, std::uint8_t* packet, std::uint32_t size)
@@ -69,13 +69,14 @@ static bool IsCINReady()
 #if BUILD_IS_SYSTEM_WINDOWS
 	return true;
 #else
-	int            fd = ::fileno(stdin);
-	fd_set         fdset {};
+	fd_set readfds {};
+	FD_SET(fileno(stdin), &readfds);
+
 	struct timeval timeout;
-	FD_SET(fd, &fdset);
 	timeout.tv_sec  = 0;
-	timeout.tv_usec = 1;
-	return ::select(fd + 1, &fdset, NULL, NULL, &timeout) == 1;
+	timeout.tv_usec = 0;
+
+	return select(1, &readfds, NULL, NULL, &timeout) > 0;
 #endif
 }
 

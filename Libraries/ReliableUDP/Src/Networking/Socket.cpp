@@ -439,7 +439,7 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = Receive(m_Socket, data, len, 0);
-			if (r == 0)
+			if (isNonBlocking() && r == 0)
 			{
 				close();
 			}
@@ -482,7 +482,7 @@ namespace ReliableUDP::Networking
 			r = ReceiveFrom(m_Socket, buf, len, 0, &addr, &addrSize);
 		}
 
-		if (r == 0)
+		if (isNonBlocking() && r == 0)
 		{
 			close();
 			return 0;
@@ -514,7 +514,7 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = Send(m_Socket, data, len, 0);
-			if (r == 0)
+			if (isNonBlocking() && r == 0)
 			{
 				close();
 			}
@@ -556,7 +556,6 @@ namespace ReliableUDP::Networking
 			}
 		}
 
-
 		sockaddr_storage addr {};
 		std::size_t      addrSize = sizeof(addr);
 		ToSockAddr(endpoint, &addr, &addrSize);
@@ -567,7 +566,7 @@ namespace ReliableUDP::Networking
 		while (len != 0)
 		{
 			auto r = SendTo(m_Socket, data, len, 0, &addr, addrSize);
-			if (r == 0)
+			if (isNonBlocking() && r == 0)
 			{
 				close();
 			}
@@ -620,7 +619,8 @@ namespace ReliableUDP::Networking
 			close();
 			return false;
 		}
-		m_LocalEndpoint = endpoint;
+		m_LocalEndpoint  = endpoint;
+		m_RemoteEndpoint = {};
 
 		if (isNonBlocking())
 		{
@@ -699,6 +699,7 @@ namespace ReliableUDP::Networking
 		if (CloseSocket(m_Socket) < 0)
 			reportError(LastError());
 		m_Socket         = ~0ULL;
+		m_LocalEndpoint  = {};
 		m_RemoteEndpoint = {};
 	}
 
