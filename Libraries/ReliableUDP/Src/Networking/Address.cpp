@@ -1,5 +1,7 @@
 #include "ReliableUDP/Networking/Address.h"
 
+#include <cstring>
+
 #include <sstream>
 
 namespace ReliableUDP::Networking

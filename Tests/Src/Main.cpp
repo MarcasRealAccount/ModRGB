@@ -2,6 +2,7 @@
 #include <ReliableUDP/Utils/Core.h>
 
 #include <csignal>
+#include <cstring>
 
 #include <iostream>
 #include <thread>

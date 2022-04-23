@@ -388,7 +388,7 @@ namespace ReliableUDP::Networking
 				ipv6->sin6_addr.s6_addr[i] = endpoint.m_Address.m_IPv6.m_Bytes[15 - i];
 		}
 
-#if !BUILD_IS_SYSTEM_WINDOWS
+#if BUILD_IS_SYSTEM_MACOSX
 		addr->ss_len = static_cast<std::uint8_t>(*addrSize);
 #endif
 	}

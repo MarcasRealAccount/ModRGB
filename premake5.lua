@@ -43,4 +43,9 @@ workspace("ModRGB")
 		files({ "%{prj.location}/Src/**" })
 		removefiles({ "*.DS_Store" })
 
+		filter("system:linux")
+			linkoptions({ "-pthread" })
+
+		filter({})
+
 		common:addActions()

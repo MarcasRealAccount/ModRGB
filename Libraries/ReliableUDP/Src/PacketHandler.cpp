@@ -1,6 +1,7 @@
 #include "ReliableUDP/PacketHandler.h"
 
 #include <cstdlib>
+#include <cstring>
 
 namespace ReliableUDP
 {
