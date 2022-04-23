@@ -180,7 +180,7 @@ namespace ReliableUDP::Networking
 	static int SetNonBlocking(std::uintptr_t socket)
 	{
 #if BUILD_IS_SYSTEM_WINDOWS
-		u_long mode = nonBlocking;
+		u_long mode = 1;
 		return ::ioctlsocket(static_cast<SOCKET>(socket), FIONBIO, &mode);
 #else
 		int mode = (::fcntl(static_cast<int>(socket), F_GETFL, 0) & ~O_NONBLOCK) | O_NONBLOCK;
@@ -293,6 +293,30 @@ namespace ReliableUDP::Networking
 		switch (errorCode)
 		{
 #if BUILD_IS_SYSTEM_WINDOWS
+		case WSAEFAULT: [[fallthrough]];
+		case WSAEMFILE: [[fallthrough]];
+		case WSAEINVALIDPROVIDER: [[fallthrough]];
+		case WSAEINVALIDPROCTABLE: [[fallthrough]];
+		case WSANOTINITIALISED: return ESocketError::KernelError;
+		case WSAEACCES: return ESocketError::NoAccess;
+		case WSAEAFNOSUPPORT: return ESocketError::AFNotSupported;
+		case WSAENOBUFS: return ESocketError::LowMemory;
+		case WSAEPROTONOSUPPORT: return ESocketError::ProtocolNotSupported;
+		case WSAESOCKTNOSUPPORT: [[fallthrough]];
+		case WSAEPROTOTYPE: return ESocketError::TypeNotSupported;
+		case WSAEINTR: return ESocketError::Interrupted;
+		case WSAEBADF: [[fallthrough]];
+		case WSAEINVAL: return ESocketError::InvalidArgument;
+		case WSAEADDRINUSE: [[fallthrough]];
+		case WSAEADDRNOTAVAIL: return ESocketError::AddressNotAvailable;
+		case WSAECONNREFUSED: return ESocketError::ConnectionRefused;
+		case WSAENETUNREACH: return ESocketError::NetworkUnreachable;
+		case WSAEHOSTUNREACH: return ESocketError::HostUnreachable;
+		case WSAEOPNOTSUPP: [[fallthrough]];
+		case WSAEDESTADDRREQ: return ESocketError::ListenUnsupported;
+		case WSAEISCONN: return ESocketError::AlreadyConnected;
+		case WSAENETDOWN: return ESocketError::NetworkDown;
+		case WSAEHOSTDOWN: return ESocketError::HostDown;
 #else
 		case EIO: [[fallthrough]];
 		case EFAULT: [[fallthrough]];
@@ -414,6 +438,7 @@ namespace ReliableUDP::Networking
 		case ESocketError::NetworkDown: return "Network is down";
 		case ESocketError::HostDown: return "Host is down";
 		}
+		return "Unknown error";
 	}
 
 	Socket::Socket(Socket&& move) noexcept
@@ -471,7 +496,7 @@ namespace ReliableUDP::Networking
 		sockaddr_storage addr {};
 		std::size_t      addrSize = sizeof(addr);
 
-		std::size_t r = 0U;
+		std::make_signed_t<std::size_t> r = 0U;
 		if (isConnected())
 		{
 			r = Receive(m_Socket, buf, len, 0);
